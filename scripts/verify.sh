@@ -70,6 +70,12 @@ run "the minimum supported Rust check" python3 scripts/check_msrv.py "$PWD"
 # secret in a .sh, .env, .lock or .py file; this proves it does not.
 run "the privacy scanner's regression test" python3 scripts/test_verify_repo.py
 
+# The Rust domain vocabulary and the TypeScript mirror must agree. A
+# value added on one side and forgotten on the other is not a compile
+# error: the backend would send a value the frontend's union does not
+# contain, and the frontend would treat it as an unknown member.
+run "the type vocabulary check" python3 scripts/check_types.py "$PWD"
+
 # The native application. `--no-bundle` compiles and links the binary
 # without the platform bundler, which needs an interactive session on
 # macOS and downloads tooling on Linux. The .app and the installers are

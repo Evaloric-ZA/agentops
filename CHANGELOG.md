@@ -17,6 +17,14 @@ Nothing yet.
 A maintenance release. No feature is added, no screen changes, and the
 data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 
+### Added
+
+- **A check that the Rust enums and the TypeScript unions agree.** The
+  frontend mirrors four Rust enums as string unions. A value added on one
+  side and forgotten on the other is not a compile error — the backend
+  would send a value the frontend's union does not contain — so the sweep
+  now compares them.
+
 ### Fixed
 
 - **The simulator was changing the seeded data.** It advanced, failed and
