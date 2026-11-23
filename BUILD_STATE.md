@@ -424,6 +424,68 @@ input, not from the ref it is referenced by. All three jobs failed
 immediately with *"'toolchain' is a required input"*. The input is now
 given explicitly.
 
+#### 13. The sweep assumed the caller had set the PATH — FIXED
+
+`cargo tauri` looks for a binary named `cargo-tauri`, which lives in
+`node_modules/.bin`. The sweep created the bridge there but never put
+the directory on the PATH. On a CI runner — where `node_modules/.bin` is
+not on the PATH — the native build failed in twenty milliseconds with
+*"no such command: `tauri`"*. The local runs had not caught it because
+the shell wrapper had exported the PATH.
+
+The sweep now exports the PATH itself. Verified by running the whole
+sweep with `node_modules/.bin` removed from the PATH: **12 passed, 0
+failed.**
+
+#### 14. The application had no palette on its first paint — FIXED
+
+The colours are defined only in `html[data-theme="dark"]` and
+`html[data-theme="light"]`; the `:root` block holds fonts, radii,
+spacing and transitions but no colour. The theme attribute was set by
+`applyTheme`, which was called from `loadSettings` — an asynchronous
+call made after the first mount.
+
+So between the first paint and the settings arriving, `<html>` had no
+`data-theme` attribute and therefore **no colour variables at all**. Every
+`var(--bg-base)` and every other colour resolved to nothing.
+
+`<html>` now carries `data-theme="dark"` and `data-density="comfortable"`
+in `index.html`, before the first paint. The dark theme is the backend's
+default and the store's default, so this matches what the application
+would have applied a moment later. No stylesheet or component changed.
+
+#### 15. The Timezone setting did nothing — FIXED
+
+The setting was validated by the backend, offered by the Settings screen
+with eight IANA zones, persisted, and never used. The timestamps were
+formatted with `toLocaleTimeString(undefined, ...)`, which is the
+machine's own zone.
+
+`formatTime` and `formatDateTime` now take the zone into account. The
+zone comes from the persisted settings, so the control has an effect.
+
+An unusable zone cannot take the view down: `Intl` throws a
+`RangeError` on a zone it does not know, and the backend accepts any
+name containing a slash. The zone is checked before it is used, and an
+unusable one falls back to the machine's zone.
+
+**This changes what is displayed.** Timestamps now render in the
+selected zone — UTC by default — instead of the machine's zone. The
+layout and the design are untouched.
+
+#### 16. The appearance function read the store behind the caller's back — FIXED
+
+`applyTheme(value)` took the theme as a parameter but read the density
+from the global store. It worked because both call sites set the store
+first, and it would have broken the first time anyone called it
+differently. It is now `applyAppearance(settings)`, with one source of
+truth.
+
+#### 17. A store was written but never read — FIXED
+
+`settingsLoaded` was exported, set to true when the settings arrived,
+and read by nothing. Removed.
+
 ### Verified and deliberately not changed
 
 - **The data model is untouched.** No migration was added, so a v0.1

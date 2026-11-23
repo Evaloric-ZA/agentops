@@ -1,8 +1,9 @@
 // Application-wide UI state: the current view, the theme and the settings.
 
-import { writable, derived, get } from "svelte/store";
+import { writable, derived } from "svelte/store";
 import type { AppSettings } from "../domain/types";
 import { api } from "../lib/tauri";
+import { setDisplayTimeZone } from "../lib/format";
 
 /** The navigation model. Every entry opens a real view. */
 export interface NavItem {
@@ -56,9 +57,6 @@ export const settings = writable<AppSettings>({
   notificationsEnabled: true,
 });
 
-/** Whether the settings have loaded from the database yet. */
-export const settingsLoaded = writable(false);
-
 /** The last error the shell should surface. */
 export const shellError = writable<string | null>(null);
 
@@ -66,27 +64,29 @@ export const shellError = writable<string | null>(null);
 export const theme = derived(settings, ($settings) => $settings.theme);
 
 /**
- * Apply the theme to the document element.
+ * Apply the appearance to the document element.
  *
- * The attribute is set on <html> so the CSS variable sets in app.css
- * switch wholesale.
+ * The attributes are set on <html> so the CSS variable sets in app.css
+ * switch wholesale. The palette lives only in `html[data-theme="dark"]`
+ * and `html[data-theme="light"]`, so index.html sets the dark theme on
+ * the element itself — otherwise the first paint, before the settings
+ * arrive, has no colours at all.
  */
-export function applyTheme(value: string): void {
+export function applyAppearance(next: AppSettings): void {
   const root = document.documentElement;
-  root.setAttribute("data-theme", value === "light" ? "light" : "dark");
-  root.setAttribute("data-density", get(settings).compactMode ? "compact" : "comfortable");
+  root.setAttribute("data-theme", next.theme === "light" ? "light" : "dark");
+  root.setAttribute("data-density", next.compactMode ? "compact" : "comfortable");
+  setDisplayTimeZone(next.timezone);
 }
 
-/** Load the settings and apply the theme. */
+/** Load the settings and apply them. */
 export async function loadSettings(): Promise<void> {
   try {
     const loaded = await api.getSettings();
     settings.set(loaded);
-    applyTheme(loaded.theme);
+    applyAppearance(loaded);
   } catch (error) {
     shellError.set(error instanceof Error ? error.message : String(error));
-  } finally {
-    settingsLoaded.set(true);
   }
 }
 
@@ -100,7 +100,7 @@ export async function saveSettings(next: AppSettings): Promise<boolean> {
   try {
     const saved = await api.updateSettings(next);
     settings.set(saved);
-    applyTheme(saved.theme);
+    applyAppearance(saved);
     shellError.set(null);
     return true;
   } catch (error) {

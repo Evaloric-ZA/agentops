@@ -19,6 +19,19 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 
 ### Fixed
 
+- **The application had no palette on its first paint.** The colours live
+  only in `html[data-theme="dark"]` and `html[data-theme="light"]`, and
+  the theme attribute was set after the settings had loaded
+  asynchronously — so every launch rendered a frame with no colours at
+  all before the settings arrived. The theme is now on the element in
+  `index.html`, before the first paint.
+- **The Timezone setting did nothing.** It was validated by the backend,
+  offered by the Settings screen and persisted, but never reached a
+  formatter: the timestamps were rendered in the machine's own zone. The
+  formatters now use the selected zone, and an unusable zone falls back
+  to the machine's zone rather than throwing. Timestamps now display in
+  the selected zone — UTC by default — instead of the machine's zone.
+
 - **The privacy scanner missed secrets in files it did not recognise.**
   It scanned only a list of known text suffixes, so a secret written into
   a `.sh`, `.env`, `.lock` or `.py` file was not detected. It now reads
@@ -62,6 +75,12 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
   is caught locally rather than only on a CI runner.
 
 ### Changed
+
+- **The sweep now puts `node_modules/.bin` on the PATH itself.**
+  `cargo tauri` looks for a binary named `cargo-tauri`, which lives in
+  `node_modules/.bin`. The sweep created the bridge there but left the
+  PATH to the caller, so on a CI runner the native build failed with
+  *"no such command: `tauri`"*. The sweep is now self-contained.
 
 - **The continuous integration actions are pinned to a commit** rather
   than to a tag, so a moved tag cannot change what the build runs.

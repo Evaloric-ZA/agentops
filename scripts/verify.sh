@@ -12,6 +12,12 @@ set -u
 
 cd "$(dirname "$0")/.." || exit 1
 
+# `cargo tauri ...` invokes a binary named `cargo-tauri`, and Cargo looks
+# for it on the PATH. The npm CLI installs the Tauri CLI into
+# node_modules/.bin, which is not on the PATH by default — so the sweep
+# puts it there itself rather than relying on the caller to have done it.
+export PATH="$PWD/node_modules/.bin:$PATH"
+
 PASS=0
 FAIL=0
 

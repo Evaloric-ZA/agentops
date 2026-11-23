@@ -1,5 +1,9 @@
 <!doctype html>
-<html lang="en">
+<!-- The palette lives in html[data-theme="dark"] and html[data-theme="light"],
+     so the theme has to be on the element before the first paint. The
+     settings are loaded asynchronously and would otherwise arrive after
+     the application had already rendered with no colours at all. -->
+<html lang="en" data-theme="dark" data-density="comfortable">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
