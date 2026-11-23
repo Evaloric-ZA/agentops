@@ -282,6 +282,134 @@ its content on `status === "loaded"`. All twelve routes verified:
 | Crew | 1 | yes |
 | Settings | — | a form view; errors surface through the shell error banner |
 
+## Phase 7 — The v0.1.1 maintenance release
+
+### The inspection facts
+
+Recorded before anything was edited, as the release required.
+
+| Fact | Value |
+|---|---|
+| The branch | `main`, then `fix/v0.1.1-hardening` |
+| The commit | `73a1b7cc63ebe460156b3ac6afe2794c5c9ba06d` |
+| The working tree | clean |
+| Rust | `rustc 1.93.1 (01f6ddf75 2026-02-11)` |
+| Cargo | `cargo 1.93.1 (083ac5135 2025-12-15)` |
+| Node | `v26.13.1` |
+| npm | `11.20.0` |
+| macOS | `26.5.2` (build `25F84`), `arm64` |
+| The Tauri CLI | `tauri-cli 2.12.6` |
+
+The complete tree was enumerated: **94 tracked files**. The generated
+output — `node_modules`, `src-tauri/target`, `dist`, `src-tauri/gen`, the
+mobile icon sets and the `.DS_Store` files — is excluded by `.gitignore`
+and was not inspected as source.
+
+### Findings, and what was done about each
+
+Every finding below was **reproduced against the source** before it was
+changed. Nothing was changed on the strength of a report alone.
+
+#### 1. The privacy scanner missed secrets in files it did not recognise — FIXED
+
+`scripts/verify_repo.py` scanned only the suffixes in a fixed list.
+A secret written into a `.sh`, `.env`, `.lock` or `.py` file was not
+detected, because those suffixes were not on the list.
+
+Reproduced by writing a fake secret into each of those files in a copy of
+the tree and running the scanner: it reported *"Repository structure and
+privacy scan passed"* for all four.
+
+The scanner now reads every file in the tree and scans it if it decodes as
+UTF-8 and holds no NUL byte, so a file's name cannot decide whether it is
+checked.
+
+#### 2. The privacy scanner missed the two commonest shapes of a secret — FIXED
+
+The pattern required a quoted value and a bare key, so the usual unquoted
+`.env` form (`API_KEY=sk-live-...`) and the usual quoted JSON form
+(`{"api_key": "sk-live-..."}`) both passed. The `credential` and `passwd`
+key names were not recognised at all.
+
+The pattern now accepts a quoted or bare key and a quoted or bare value,
+and recognises the six key names.
+
+#### 3. The scanner had no test of its own — ADDED
+
+`scripts/test_verify_repo.py` — twenty cases, standard library only, runs
+with a plain `python3`. Each case builds a throwaway tree and asserts
+what the scanner does with it. It is part of the sweep.
+
+#### 4. The version could drift between the manifests — FIXED
+
+`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and
+the `agentops` entry in `src-tauri/Cargo.lock` all carry the version, and
+nothing forced them to agree. The application does not display its version
+anywhere, so the drift would have been invisible to the operator and to
+anyone reading a bug report.
+
+Reproduced by changing `package.json` to 0.1.1 and leaving the other
+three at 0.1.0: nothing in the tree noticed.
+
+`scripts/check_version.py` now reads all four and fails if they disagree.
+It is part of the sweep. It caught the real drift during this release —
+`Cargo.lock` still said 0.1.0 after the other three were bumped.
+
+#### 5. The sweep never built the application — FIXED
+
+`cargo test` compiles the library and the binary, but the sweep never ran
+the Tauri build, so a tree that could not be assembled as an application
+still passed the sweep.
+
+The sweep now runs `cargo tauri build --debug --no-bundle`, which
+compiles and links the application without the platform bundler — the
+bundler needs an interactive session on macOS and downloads tooling on
+Linux.
+
+#### 6. The `cargo-tauri` bridge was created before `npm ci` — FIXED
+
+This was a defect introduced by the change in finding 5 and caught by
+running it. `npm ci` removes `node_modules` and installs it again, so the
+bridge written before it ran was deleted along with everything else, and
+the native build failed with *"no such command: `tauri`"*.
+
+The bridge is now created after `npm ci` and again immediately before the
+native build.
+
+#### 7. The continuous integration actions floated on tags — FIXED
+
+`actions/checkout@v4` and `actions/setup-node@v4` were tag references. A
+moved tag would change what the build runs. Both are now pinned to a
+commit, with the tag in a comment.
+
+#### 8. CI had no concurrency group and asked for more permission than it needed — FIXED
+
+A superseded run now cancels instead of competing for a runner, and the
+workflow asks for `contents: read` only.
+
+#### 9. The minimum supported Rust was declared but never verified — FIXED
+
+`src-tauri/Cargo.toml` declares `rust-version = "1.77"`, and nothing
+checked the claim. A CI job now compiles the crate on that toolchain.
+
+#### 10. There was no changelog and no release note — ADDED
+
+`CHANGELOG.md`, in Keep a Changelog format. The release history was
+otherwise only in the commit messages.
+
+### Verified and deliberately not changed
+
+- **The data model is untouched.** No migration was added, so a v0.1
+  database opens as a v0.1.1 database with no conversion step.
+- **The visual design is untouched.** No stylesheet, component or route
+  was changed. The twelve screens, the navigation and the hierarchy are
+  as they were.
+- **The capability set is still `core:default` and nothing else.**
+- **The application still makes no network request** and still has no
+  filesystem, shell, process, HTTP, clipboard or updater permission.
+- **The simulator is still deterministic** and still driven from the
+  frontend.
+
 ## Known limitations
 
 These are genuinely outside v0.1 and are recorded rather than hidden.

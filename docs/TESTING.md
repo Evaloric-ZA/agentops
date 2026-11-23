@@ -40,6 +40,10 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-features
 
+python3 scripts/check_version.py .
+python3 scripts/test_verify_repo.py
+cargo tauri build --debug --no-bundle
+
 bash scripts/verify.sh
 ```
 
@@ -48,11 +52,39 @@ covers both the TypeScript and the Svelte template diagnostics.
 
 `cargo clippy` runs with `-D warnings`, so a single warning fails the build.
 
+`scripts/verify.sh` runs all of the above and prints one line per check.
+There are eleven:
+
+| Check | Proves |
+|---|---|
+| `npm ci` | The lockfile is sufficient on its own |
+| `npm run check` | The type and template diagnostics are clean |
+| `npm test` | The frontend unit tests pass |
+| `npm run build` | The production bundle assembles |
+| `cargo fmt --check` | The Rust is formatted |
+| `cargo clippy` | The Rust is idiomatic; one warning fails the build |
+| `cargo test` | The Rust unit tests pass |
+| the version check | The four manifests agree on the version |
+| the scanner's regression test | The privacy scanner still catches what it must |
+| the native build | The application compiles and links as an application |
+| the privacy verifier | The required paths exist and nothing is embedded |
+
 ## The privacy check
 
-`scripts/verify.sh` runs the skill's repository verifier, which asserts the
-required paths exist and scans every text file for email addresses, private
-IPv4 ranges, bearer tokens and secret assignments.
+`scripts/verify_repo.py` asserts the required paths exist and scans the
+tree for email addresses, private IPv4 ranges, bearer tokens and secret
+assignments.
+
+The scan is **extension-blind**: it reads every file and scans it if it
+decodes as UTF-8 and holds no NUL byte. An earlier version scanned only a
+list of known text suffixes, and that was a real false negative — a secret
+in a `.sh`, `.env`, `.lock` or `.py` file was not detected. It also
+required a quoted value and a bare key, so the usual unquoted `.env` form
+and the usual quoted JSON form both passed.
+
+`scripts/test_verify_repo.py` is the scanner's own regression test: twenty
+cases, each building a throwaway tree and asserting what the scanner does
+with it. It runs with a plain `python3` and needs no third-party package.
 
 ## Manual checks
 

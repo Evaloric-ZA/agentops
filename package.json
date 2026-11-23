@@ -1,9 +1,9 @@
 {
   "name": "agentops",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
-  "description": "AgentOps v0.1 - a local, synthetic agent operations console.",
+  "description": "AgentOps - a local, synthetic agent operations console.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -6,10 +6,16 @@ Everything in this repository is synthetic. The seed data uses invented
 agent names, invented tasks and invented tool names. There are no real hosts,
 no real people, no real model names and no network addresses.
 
-The build is checked for accidental leakage: `scripts/verify.sh` runs the
-skill's verifier, which scans every text file for email addresses, private
-IPv4 ranges, bearer tokens and secret assignments. RFC 5737 documentation
-ranges and `127.0.0.1` are the only addresses permitted.
+The build is checked for accidental leakage: `scripts/verify.sh` runs
+`scripts/verify_repo.py`, which scans every file in the tree for email
+addresses, private IPv4 ranges, bearer tokens and secret assignments. The
+scan is extension-blind — it reads every file and scans it if it decodes as
+UTF-8 and holds no NUL byte — so a file's name cannot decide whether it is
+checked. RFC 5737 documentation ranges and `127.0.0.1` are the only
+addresses permitted.
+
+The scanner has its own regression test, `scripts/test_verify_repo.py`, so
+the false negatives it once had cannot come back unnoticed.
 
 There is **no telemetry, no analytics, no crash upload and no remote font**.
 The frontend loads nothing from the network: the CSP restricts it to

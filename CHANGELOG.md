@@ -1,0 +1,88 @@
+# Changelog
+
+All notable changes to AgentOps are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
+uses [semantic versioning](https://semver.org/).
+
+AgentOps v0.1 is a local proof of architecture. Everything in it is
+synthetic. There is no real agent, no model API and no network service in
+any release.
+
+## [Unreleased]
+
+Nothing yet.
+
+## [0.1.1] - 2026-11-23
+
+A maintenance release. No feature is added, no screen changes, and the
+data model is unchanged: a v0.1 database opens as a v0.1.1 database.
+
+### Fixed
+
+- **The privacy scanner missed secrets in files it did not recognise.**
+  It scanned only a list of known text suffixes, so a secret written into
+  a `.sh`, `.env`, `.lock` or `.py` file was not detected. It now reads
+  every file in the tree and scans it if it decodes as UTF-8 and holds no
+  NUL byte, so a file's name cannot decide whether it is checked.
+- **The privacy scanner missed the two commonest shapes of a secret.** A
+  value without quotes — the usual `.env` form — and a quoted key — the
+  usual JSON form — both passed the scan. Both are caught now, and so are
+  the `credential` and `passwd` key names.
+- **The version could drift between the manifests.** Nothing in the
+  toolchain forces `package.json`, `src-tauri/Cargo.toml`,
+  `src-tauri/tauri.conf.json` and `src-tauri/Cargo.lock` to agree, and
+  the application does not display its version anywhere, so a bump that
+  missed one of them was invisible. There is now a check, and it is part
+  of the sweep.
+
+### Added
+
+- **The privacy scanner has its own regression test** —
+  `scripts/test_verify_repo.py`, twenty cases, standard library only. It
+  builds a throwaway tree for each case and asserts what the scanner does
+  with it, so the false negatives above cannot come back.
+- **The sweep builds the native application.** `cargo test` compiles the
+  library and the binary, but the sweep never ran the Tauri build, so a
+  tree that could not be assembled as an application still passed. The
+  sweep now runs `cargo tauri build --debug --no-bundle`, which compiles
+  and links the application without the platform bundler.
+- **A changelog.** This file.
+- **CI checks the minimum supported Rust.** `src-tauri/Cargo.toml`
+  declares `rust-version = "1.77"`, and nothing verified that claim. A
+  job now compiles the crate on that toolchain.
+
+### Changed
+
+- **The continuous integration actions are pinned to a commit** rather
+  than to a tag, so a moved tag cannot change what the build runs.
+- **CI cancels a superseded run** instead of competing with it for a
+  runner, and it asks for only `contents: read`.
+
+## [0.1.0] - 2026-11-23
+
+The first release.
+
+### Added
+
+- A Tauri 2 desktop application: a Rust core, a Svelte 5 and TypeScript
+  frontend, and SQLite persistence through `rusqlite`.
+- Twelve screens: Night Shift, Agents, Runs, Waiting on You, Policies,
+  Access, Compute, Audit Log, Tools, Team, Settings and Crew.
+- Twenty-four typed Tauri commands. The frontend never receives a raw
+  database error or a stack trace; every failure arrives as a stable code
+  and a message that is safe to display.
+- A deterministic simulator driven from the frontend, so the operator
+  controls the pace and a replay reproduces the same events and the same
+  identifiers.
+- A synthetic dataset: ten agents, ten runs, thirty stages, thirty
+  events, three approvals, six tools, six policies, four team members and
+  five audit records, all invented and anchored to a fixed instant.
+- A validation sweep — `scripts/verify.sh` — and continuous integration
+  on Ubuntu and macOS.
+- A privacy scan, `scripts/verify_repo.py`, that fails the build if a
+  secret, an email address or a private network address is embedded in
+  the tree.
+
+[Unreleased]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Evaloric-ZA/agentops/releases/tag/v0.1.0

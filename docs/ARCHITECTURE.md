@@ -56,7 +56,12 @@ agentops/
 │       ├── simulator/          the deterministic simulator
 │       └── util.rs             UTC time helpers
 ├── docs/
-└── scripts/verify.sh
+├── CHANGELOG.md
+└── scripts/
+    ├── verify.sh                 the sweep: eleven checks, one line each
+    ├── verify_repo.py            the structure and privacy scan
+    ├── test_verify_repo.py       the privacy scan's own regression test
+    └── check_version.py          the manifests must agree on the version
 ```
 
 ## The boundary

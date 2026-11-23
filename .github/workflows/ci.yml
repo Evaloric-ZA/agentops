@@ -1,6 +1,15 @@
 name: ci
 on: [push, pull_request]
 
+# One run per ref. A newer push supersedes an older one instead of
+# competing with it for a runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   sweep:
     name: the sweep (${{ matrix.os }})
@@ -10,14 +19,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      # The actions are pinned to a commit, not to a tag, so a moved tag
+      # cannot change what the build runs.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
         with:
           components: rustfmt, clippy
 
@@ -35,7 +46,41 @@ jobs:
             build-essential \
             pkg-config
 
-      # The whole sweep: the frontend checks, the Rust checks and the
-      # privacy verifier, one PASS/FAIL line per check.
+      # The whole sweep: the frontend checks, the Rust checks, the version
+      # check, the scanner's own test, the native build and the privacy
+      # verifier. One PASS/FAIL line per check.
       - name: the sweep
         run: bash scripts/verify.sh
+
+  msrv:
+    name: the minimum supported Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # The version in src-tauri/Cargo.toml's rust-version field. If this
+      # job fails, either the declared minimum has risen and the field
+      # must be updated, or the minimum is no longer true.
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: "1.77"
+
+      - name: the Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            pkg-config
+
+      - name: it compiles on the minimum supported Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --all-features

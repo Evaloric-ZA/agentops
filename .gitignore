@@ -17,6 +17,11 @@ src-tauri/icons/ios/
 *.dmg
 *.app
 
+# Python bytecode. The scanner and its test are plain scripts, but
+# importing one of them writes a cache directory next to it.
+__pycache__/
+*.pyc
+
 # local environment and editor state
 .env
 .env.*
