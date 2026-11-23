@@ -38,10 +38,35 @@ def cargo_toml_version(root: Path) -> str:
         if stripped.startswith("["):
             in_package = stripped == "[package]"
             continue
-        if in_package and stripped.startswith("version"):
+        if not in_package:
+            continue
+        if stripped.startswith("version."):
+            raise ValueError(
+                "src-tauri/Cargo.toml inherits its version from a workspace, "
+                "which this check cannot resolve"
+            )
+        if stripped == "version" or stripped.startswith("version "):
             _, _, value = stripped.partition("=")
             return value.strip().strip('"').strip("'")
     raise ValueError("no version in the [package] section of src-tauri/Cargo.toml")
+
+
+def package_lock_version(root: Path) -> str:
+    """The version npm recorded in the lockfile.
+
+    npm does not update this field on `npm ci`, so it can drift away
+    from package.json without anything noticing.
+    """
+    data = json.loads((root / "package-lock.json").read_text(encoding="utf-8"))
+    root_entry = data.get("packages", {}).get("", {})
+    top = str(data.get("version", ""))
+    nested = str(root_entry.get("version", ""))
+    if top and nested and top != nested:
+        raise ValueError(
+            f"package-lock.json disagrees with itself: {top} at the top and "
+            f"{nested} in the root package"
+        )
+    return nested or top
 
 
 def tauri_conf_version(root: Path) -> str:
@@ -64,6 +89,7 @@ def cargo_lock_version(root: Path) -> str:
 def check(root: Path) -> list[str]:
     sources = {
         "package.json": package_json_version,
+        "package-lock.json": package_lock_version,
         "src-tauri/Cargo.toml": cargo_toml_version,
         "src-tauri/tauri.conf.json": tauri_conf_version,
         "src-tauri/Cargo.lock": cargo_lock_version,
