@@ -28,8 +28,12 @@ jobs:
           node-version: "20"
           cache: npm
 
+      # Pinned to a commit, so the `toolchain` input has to be given
+      # explicitly: the action reads the toolchain from its input, not
+      # from the ref it is referenced by.
       - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       # The Tauri crate links against the system webview on Linux.
@@ -68,7 +72,7 @@ jobs:
       # must be updated, or the minimum is no longer true.
       - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
         with:
-          toolchain: "1.77"
+          toolchain: "1.90"
 
       - name: the Linux build dependencies
         run: |

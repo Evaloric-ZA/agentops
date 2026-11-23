@@ -44,6 +44,7 @@ REQUIRED = [
     "scripts/verify.sh",
     "scripts/verify_repo.py",
     "scripts/check_version.py",
+    "scripts/check_msrv.py",
     ".github/workflows/ci.yml",
 ]
 

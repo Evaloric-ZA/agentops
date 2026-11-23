@@ -55,6 +55,11 @@ run "cargo test" cargo test --manifest-path src-tauri/Cargo.toml --all-features
 # that misses one of them is invisible.
 run "the version check" python3 scripts/check_version.py "$PWD"
 
+# The declared minimum Rust has to be true. Cargo only warns when it is
+# not, and a dependency that needs a newer compiler fails with an
+# obscure message, so the claim is checked here instead.
+run "the minimum supported Rust check" python3 scripts/check_msrv.py "$PWD"
+
 # The privacy scanner's own regression test. The scanner once missed a
 # secret in a .sh, .env, .lock or .py file; this proves it does not.
 run "the privacy scanner's regression test" python3 scripts/test_verify_repo.py

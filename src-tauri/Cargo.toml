@@ -3,7 +3,10 @@ name = "agentops"
 version = "0.1.1"
 description = "AgentOps - a local, synthetic agent operations console."
 edition = "2021"
-rust-version = "1.77"
+# The true minimum, established by `cargo metadata` and verified by the
+# MSRV job and by scripts/check_msrv.py. The tauri crate itself requires
+# 1.90, so this cannot honestly be lower.
+rust-version = "1.90"
 license = "MIT"
 
 [lib]

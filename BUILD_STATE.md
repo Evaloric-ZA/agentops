@@ -397,6 +397,33 @@ checked the claim. A CI job now compiles the crate on that toolchain.
 `CHANGELOG.md`, in Keep a Changelog format. The release history was
 otherwise only in the commit messages.
 
+#### 11. The declared minimum supported Rust was false — FIXED
+
+`src-tauri/Cargo.toml` declared `rust-version = "1.77"`. The first run
+of the new CI job failed with *"feature `edition2024` is required"* —
+`tauri` itself requires Rust 1.90, and 112 packages in the resolved
+graph need more than 1.77.
+
+`cargo metadata` was asked for the minimum every dependency declares;
+the highest is **1.90**, set by `tauri`, `tauri-build`, `tauri-codegen`,
+`tauri-macros`, `tauri-runtime`, `tauri-runtime-wry`, `tauri-utils`,
+`muda` and `tray-icon`.
+
+Both ends were then verified on this machine: `cargo +1.77 check` fails
+with `rc=101`, and `cargo +1.90 check` succeeds with `rc=0`.
+
+The claim is now 1.90, and `scripts/check_msrv.py` compares the declared
+minimum against the resolved graph on every sweep, so a false claim is
+caught locally rather than only on a CI runner.
+
+#### 12. The CI workflow was broken by its own hardening — FIXED
+
+Pinning `dtolnay/rust-toolchain` to a commit removed the `@stable`
+ref's meaning: the action reads the toolchain from its `toolchain`
+input, not from the ref it is referenced by. All three jobs failed
+immediately with *"'toolchain' is a required input"*. The input is now
+given explicitly.
+
 ### Verified and deliberately not changed
 
 - **The data model is untouched.** No migration was added, so a v0.1

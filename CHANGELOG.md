@@ -34,6 +34,12 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
   the application does not display its version anywhere, so a bump that
   missed one of them was invisible. There is now a check, and it is part
   of the sweep.
+- **The declared minimum supported Rust was false.** The crate claimed
+  `rust-version = "1.77"`, but `tauri` itself requires 1.90 — 112
+  dependencies in the resolved graph need more than 1.77. Cargo only
+  warns about this, and a build on 1.77 fails with the obscure message
+  *"feature `edition2024` is required"*. The claim is now 1.90, which is
+  the true minimum, and it is verified on both toolchains.
 
 ### Added
 
@@ -48,8 +54,12 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
   and links the application without the platform bundler.
 - **A changelog.** This file.
 - **CI checks the minimum supported Rust.** `src-tauri/Cargo.toml`
-  declares `rust-version = "1.77"`, and nothing verified that claim. A
-  job now compiles the crate on that toolchain.
+  declares `rust-version`, and nothing verified the claim. A job now
+  compiles the crate on that toolchain, and `scripts/check_msrv.py`
+  compares the declared minimum against what every dependency in the
+  resolved graph itself requires.
+- **The sweep checks the minimum supported Rust too**, so a false claim
+  is caught locally rather than only on a CI runner.
 
 ### Changed
 
