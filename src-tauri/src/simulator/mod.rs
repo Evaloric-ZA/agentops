@@ -18,6 +18,10 @@ use chrono::Utc;
 /// The stage names a simulated run passes through.
 const STAGES: [&str; 4] = ["plan", "execute", "verify", "report"];
 
+/// How many phases one run's cycle has: create, advance, advance,
+/// approval, fail, complete.
+const PHASES: i64 = 6;
+
 /// The simulated tasks, chosen to read as synthetic work.
 const TASKS: [&str; 6] = [
     "Reconcile the sample inventory",
@@ -157,7 +161,12 @@ pub fn tick(conn: &Connection) -> AppResult<(SimulatorState, TickOutcome)> {
 
 /// Apply one step of the simulation.
 fn apply_step(conn: &Connection, step: i64) -> AppResult<TickOutcome> {
-    let phase = step.rem_euclid(6);
+    // The phases are counted from the first tick, so the cycle starts with
+    // the create phase. The step counter starts at zero and the first tick
+    // is step one, so counting from the step number would begin the
+    // sequence at the second phase and leave the first five ticks with
+    // nothing to do.
+    let phase = (step - 1).rem_euclid(PHASES);
     let agent = pick_agent(conn, step)?;
     match phase {
         0 => create_run(conn, &agent, step),
@@ -180,15 +189,43 @@ fn pick_agent(conn: &Connection, step: i64) -> AppResult<String> {
     if ids.is_empty() {
         return Err(crate::error::AppError::Internal("no agents are seeded"));
     }
-    let index = step.rem_euclid(ids.len() as i64) as usize;
+    // The agent is chosen by the cycle, not by the step. The phase cycle
+    // is create, advance, advance, approval, fail, complete, and those six
+    // phases belong to one run, so they must belong to one agent. Choosing
+    // the agent by the step instead spread the six phases over six
+    // unrelated agents, and every phase after the first found no run of
+    // its own to act on.
+    let cycle = (step - 1).div_euclid(PHASES);
+    let index = cycle.rem_euclid(ids.len() as i64) as usize;
     Ok(ids[index].clone())
 }
 
+/// Whether a run is waiting on a human decision.
+///
+/// A run that is waiting on a reviewer must not be failed or completed
+/// behind the reviewer's back. The simulator leaves it waiting, and the
+/// operator's decision is what moves it on.
+fn waiting_on_a_decision(conn: &Connection, run_id: &str) -> AppResult<bool> {
+    let pending: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM approvals WHERE run_id = ?1 AND state = 'pending'",
+        params![run_id],
+        |row| row.get(0),
+    )?;
+    Ok(pending > 0)
+}
+
 /// The run currently owned by an agent, if any.
+///
+/// Only the simulator's own runs are considered. The seeded runs are the
+/// fixed baseline the operator sees, and the simulator must not advance,
+/// fail or complete them: a seeded run that already carries an approval
+/// would end up with two, and the seeded baseline would change underneath
+/// the operator as the demonstration ran.
 fn active_run(conn: &Connection, agent_id: &str) -> AppResult<Option<String>> {
     let mut stmt = conn.prepare(
         "SELECT id FROM runs
-         WHERE agent_id = ?1 AND status IN ('queued', 'running', 'waiting')
+         WHERE agent_id = ?1 AND id LIKE 'sim-run-%'
+           AND status IN ('queued', 'running', 'waiting')
          ORDER BY started_at DESC LIMIT 1",
     )?;
     let mut rows = stmt.query([agent_id])?;
@@ -342,6 +379,10 @@ fn fail_run(conn: &Connection, agent_id: &str, step: i64) -> AppResult<TickOutco
         Some(id) => id,
         None => return Ok(TickOutcome::Idle),
     };
+    if waiting_on_a_decision(conn, &run_id)? {
+        // The run is waiting on the operator, so it waits.
+        return Ok(TickOutcome::Idle);
+    }
     let now = Utc::now();
     conn.execute(
         "UPDATE runs SET status = 'failed', ended_at = ?2, duration_seconds = 120
@@ -383,6 +424,10 @@ fn complete_run(conn: &Connection, agent_id: &str, step: i64) -> AppResult<TickO
         Some(id) => id,
         None => return Ok(TickOutcome::Idle),
     };
+    if waiting_on_a_decision(conn, &run_id)? {
+        // The run is waiting on the operator, so it waits.
+        return Ok(TickOutcome::Idle);
+    }
     let now = Utc::now();
     conn.execute(
         "UPDATE runs SET status = 'succeeded', ended_at = ?2, duration_seconds = 180
@@ -443,11 +488,12 @@ pub fn audit(
 
 /// Restore the demo to its original seeded state.
 ///
-/// The simulation advances seeded runs as it goes, so rewinding means
-/// restoring the seed, not just the step counter: otherwise a replay would
-/// start from a different state and produce a different sequence. The
-/// identifier counter is reset too, so a replay reproduces the same
-/// identifiers as well as the same events.
+/// The simulation creates its own runs as it goes, and the seed is restored
+/// over the top of them, so rewinding means restoring the seed rather than
+/// just the step counter: otherwise a replay would start from a different
+/// state and produce a different sequence. The identifier counter is reset
+/// too, so a replay reproduces the same identifiers as well as the same
+/// events.
 pub fn reset(conn: &Connection) -> AppResult<()> {
     let anchor = crate::seed::stored_anchor(conn)?
         .ok_or_else(|| crate::error::AppError::Internal("the database has no seed anchor"))?;

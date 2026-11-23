@@ -93,6 +93,19 @@ def main() -> int:
     expect_caught("a quoted secret key", f'{{"password": "{SECRET}"}}\n')
     expect_caught("a colon separated secret", f"token: {SECRET}\n")
 
+    # The key names that were missed because a word boundary cannot sit
+    # next to an underscore.
+    expect_caught("an uppercase underscored secret", f"SECRET_KEY={SECRET}\n")
+    expect_caught("a prefixed password", f"DB_PASSWORD={SECRET}\n")
+    expect_caught("a suffixed password", f'PASSWORD_FILE = "{SECRET}"\n')
+    expect_caught("a lowercase underscored secret", f"secret_key={SECRET}\n")
+    expect_caught("a prefixed api key", f"MY_API_KEY={SECRET}\n")
+    expect_caught("a camel case api key", f"apiKey={SECRET}\n")
+
+    # A word that merely starts with one of the names is not a secret key.
+    expect_clean("a counter that is not a secret", "tokenizer_count = 42\n")
+    expect_clean("a short value", "secret = 42\n")
+
     # The other patterns.
     expect_caught("an email address", f"contact {MAIL} about it\n")
     expect_caught("a private IPv4 address", f"the host is {IP}\n")

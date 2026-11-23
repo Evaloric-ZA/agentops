@@ -527,6 +527,69 @@ truth.
 `settingsLoaded` was exported, set to true when the settings arrived,
 and read by nothing. Removed.
 
+#### 19. The privacy scanner missed key names with an underscore — FIXED
+
+The key alternation ended in a word boundary, and `_` is a word character,
+so `SECRET_KEY`, `DB_PASSWORD`, `PASSWORD_FILE` and `secret_key` were all
+passed. Verified live against the scanner before the fix: all four missed.
+
+The key may now carry a prefix or a suffix. The separators are explicit,
+so a word that merely starts with one of the names — `tokenizer` — is not
+treated as a key. Six cases were added to the scanner's own regression
+test, which now has twenty-eight.
+
+#### 20. The simulator was changing the seeded data — FIXED
+
+The simulator advanced, failed and completed the **seeded** runs, and
+attached its approvals to seeded runs that already carried one.
+
+Reproduced live with a probe that ticked the simulator and printed the
+runs and the approvals after every step. The first probe showed the
+simulator failing seeded `run-000007` — a run with a pending approval on
+it — and then completing another seeded run. The seeded approvals were
+left pending on a run that had already failed.
+
+`active_run` now considers only the simulator's own runs, whose identifiers
+begin `sim-run-`.
+
+#### 21. The simulator's six phases belonged to six different agents — FIXED
+
+The phase and the agent were both derived from the step. The phase cycle
+is documented as create, advance, advance, approval, fail, complete, and
+those six phases belong to one run — but the run was created for one agent
+and the next phase looked for a run belonging to a different one. The
+probe showed steps two, three, seven and eight all doing nothing.
+
+The agent is now chosen by the cycle rather than by the step, and the
+phases are counted from the first tick, so the cycle begins with the
+create. The probe now shows created, advanced, advanced, approval.
+
+#### 22. The simulator failed runs that were waiting on a decision — FIXED
+
+The fail phase failed the run a tick after the approval phase raised an
+approval on it, so the approval was left pending on a run that had already
+failed. A run cannot be failed behind the operator's back, so it now waits
+until the decision is made, and the complete phase leaves it alone too.
+
+#### 23. A rejected run was left looking as though it were still running — FIXED
+
+The reject path set the run's status but not its end time or its
+duration, unlike the simulator's own failure path. The run detail view
+reads "still running" when the end time is missing, so a rejected run
+said so.
+
+#### 24. A decided approval left the agent waiting — FIXED
+
+The decision path updated the approval, the decision record, the audit
+record and the run, but never the agent — so an agent stayed in the
+`approval` state for good. An approved run now continues and its agent
+goes back to work; a rejected run stops and its agent stops with it.
+
+The decision also no longer resurrects a run that has already finished:
+the decision is recorded whatever the run has become, because it is a fact
+about what the operator did, but a run that has already failed is not moved
+back to running.
+
 ### Verified and deliberately not changed
 
 - **The data model is untouched.** No migration was added, so a v0.1

@@ -166,17 +166,48 @@ pub fn decide(
         ],
     )?;
     // An approved run continues; a rejected run stops.
-    tx.execute(
-        "UPDATE runs SET status = ?2 WHERE id = (SELECT run_id FROM approvals WHERE id = ?1)",
-        params![
-            approval_id,
-            if outcome == "approved" {
-                "running"
-            } else {
-                "failed"
-            }
-        ],
-    )?;
+    //
+    // A rejected run has to be given its end time and its duration. The
+    // simulator's own failure path sets both, and without them the run
+    // detail view reads "still running" for a run that was rejected.
+    let approved = outcome == "approved";
+    // The run is only moved on if it is still waiting. A decision is
+    // recorded whatever the run has become — it is a fact about what the
+    // operator did — but a run that has already failed must not be
+    // resurrected by a late decision.
+    let moved: usize = if approved {
+        tx.execute(
+            "UPDATE runs SET status = 'running'
+             WHERE id = (SELECT run_id FROM approvals WHERE id = ?1)
+               AND status IN ('waiting', 'running', 'queued')",
+            params![approval_id],
+        )?
+    } else {
+        tx.execute(
+            "UPDATE runs SET status = 'failed', ended_at = ?2, duration_seconds = 120
+             WHERE id = (SELECT run_id FROM approvals WHERE id = ?1)
+               AND status IN ('waiting', 'running', 'queued')",
+            params![approval_id, now],
+        )?
+    };
+    if moved > 0 {
+        if approved {
+            // The agent was waiting on this decision, so it goes back to work.
+            tx.execute(
+                "UPDATE agents SET status = 'working'
+                 WHERE id = (SELECT agent_id FROM approvals WHERE id = ?1)",
+                params![approval_id],
+            )?;
+        } else {
+            // A rejected run stops, so the agent stops with it. This mirrors
+            // the simulator's own failure path.
+            tx.execute(
+                "UPDATE agents SET status = 'failed', current_run_id = NULL
+                 WHERE id = (SELECT agent_id FROM approvals WHERE id = ?1)",
+                params![approval_id],
+            )?;
+        }
+    }
     tx.commit()?;
 
     list(db, None)?

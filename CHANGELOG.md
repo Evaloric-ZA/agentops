@@ -19,6 +19,28 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 
 ### Fixed
 
+- **The simulator was changing the seeded data.** It advanced, failed and
+  completed the seeded runs, and attached its approvals to seeded runs
+  that already carried one — so a run could show two approvals, and the
+  reviewer disagreement panel counted them wrongly. The seeded runs are
+  the fixed baseline; the simulator now only ever acts on its own runs.
+- **The simulator's six phases belonged to six different agents.** The
+  phase and the agent were both derived from the step, so the cycle
+  described as create, advance, advance, approval, fail, complete was
+  spread across unrelated agents, and most ticks found no run of their own
+  to act on. One agent now owns a whole cycle, and the phases are counted
+  from the first tick so the cycle begins with the create.
+- **The simulator failed runs that were waiting on a human decision.** A
+  run cannot be failed behind the operator's back, so it now waits until
+  the decision is made. The operator's decision is what moves it on.
+- **A rejected run was left looking as though it were still running.** The
+  reject path set the status but not the end time or the duration, so the
+  run detail view read "still running" for a run that had been rejected.
+- **A decided approval left the agent waiting.** The decision path never
+  touched the agent, so an agent stayed in the `approval` state for good.
+  An approved run continues and its agent goes back to work; a rejected
+  run stops and its agent stops with it.
+
 - **After the application restarted, the first approval decision failed.**
   The identifier counter is a process-local atomic that starts at one in
   every new process, and the database still held the identifiers the
@@ -52,6 +74,10 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
   value without quotes — the usual `.env` form — and a quoted key — the
   usual JSON form — both passed the scan. Both are caught now, and so are
   the `credential` and `passwd` key names.
+- **The privacy scanner missed key names with an underscore.** The key
+  alternation ended in a word boundary, and an underscore is a word
+  character, so `SECRET_KEY`, `DB_PASSWORD` and `PASSWORD_FILE` were all
+  passed. A key may now carry a prefix or a suffix.
 - **The version could drift between the manifests.** Nothing in the
   toolchain forces `package.json`, `src-tauri/Cargo.toml`,
   `src-tauri/tauri.conf.json` and `src-tauri/Cargo.lock` to agree, and

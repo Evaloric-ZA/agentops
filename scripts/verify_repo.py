@@ -68,8 +68,16 @@ PATTERNS = {
     ),
     # The key may be quoted (the JSON form) or bare (the .env form), and
     # the value may be quoted or bare. Both forms were missed before.
+    #
+    # The key may also carry a prefix or a suffix, so SECRET_KEY,
+    # DB_PASSWORD and PASSWORD_FILE are all recognised. The separators
+    # are explicit, so a word that merely starts with one of the names —
+    # tokenizer, for instance — is not.
     "probable secret assignment": re.compile(
-        r"(?i)\b(?:api[_-]?key|secret|password|passwd|credential|token)\b"
+        r"(?i)(?<![A-Za-z0-9])"
+        r"(?:[A-Za-z0-9]+[_-])*"
+        r"(?:api[_-]?key|secret|password|passwd|credential|token)"
+        r"(?:[_-][A-Za-z0-9]+)*"
         r"\s*['\"]?\s*[:=]\s*['\"]?"
         r"(?!synthetic|example|placeholder)[A-Za-z0-9._~+/=-]{12,}"
     ),
