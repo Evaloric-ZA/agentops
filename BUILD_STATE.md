@@ -424,7 +424,48 @@ input, not from the ref it is referenced by. All three jobs failed
 immediately with *"'toolchain' is a required input"*. The input is now
 given explicitly.
 
-#### 13. The sweep assumed the caller had set the PATH — FIXED
+#### 13. After a restart, the first approval decision failed — FIXED
+
+This is the most serious defect found in the release.
+
+The identifier counter (`src-tauri/src/domain/ids.rs`) is a process-local
+`AtomicU64` that starts at one in every new process. The database, however,
+still holds the identifiers the previous process minted. The counter was
+never advanced past what was stored — `observe_counter` existed for exactly
+that purpose and was **never called** — so the new process was handed an
+identifier that was already in use.
+
+The identifiers the counter mints are `audit-{n:06}` and `decision-{n:06}`,
+and both are primary keys. The simulator's own event identifiers are
+derived from the step counter (`sim-event-{step}-{n}`) and are unaffected.
+
+Reproduced live, before the fix:
+
+```
+the first decision after a restart failed: Some(Database(SqliteFailure(
+  Error { code: ConstraintViolation, extended_code: 1555 },
+  Some("UNIQUE constraint failed: approval_decisions.id"))))
+```
+
+and the same for `audit_events.id`.
+
+The application is restarted far more often than it is reset, so this was
+reachable in ordinary use: an operator who approved something, quit the
+application and opened it again could not approve or reject anything
+afterwards.
+
+`Database::open` and `Database::open_memory` now advance the counter past
+the highest identifier already stored. The regression test is an
+**integration** test — `src-tauri/tests/restart_ids.rs` — because it opens
+a database on disk and resets the process-local counter, which must not
+race the unit tests that share theirs.
+
+The test was verified to catch the defect: removing the two
+`observe_stored_ids()` call sites makes both integration tests fail with
+the same constraint violations, and the restore was checked byte for byte
+with SHA-256.
+
+#### 14. The sweep assumed the caller had set the PATH — FIXED
 
 `cargo tauri` looks for a binary named `cargo-tauri`, which lives in
 `node_modules/.bin`. The sweep created the bridge there but never put
@@ -437,7 +478,7 @@ The sweep now exports the PATH itself. Verified by running the whole
 sweep with `node_modules/.bin` removed from the PATH: **12 passed, 0
 failed.**
 
-#### 14. The application had no palette on its first paint — FIXED
+#### 15. The application had no palette on its first paint — FIXED
 
 The colours are defined only in `html[data-theme="dark"]` and
 `html[data-theme="light"]`; the `:root` block holds fonts, radii,
@@ -454,7 +495,7 @@ in `index.html`, before the first paint. The dark theme is the backend's
 default and the store's default, so this matches what the application
 would have applied a moment later. No stylesheet or component changed.
 
-#### 15. The Timezone setting did nothing — FIXED
+#### 16. The Timezone setting did nothing — FIXED
 
 The setting was validated by the backend, offered by the Settings screen
 with eight IANA zones, persisted, and never used. The timestamps were
@@ -473,7 +514,7 @@ unusable one falls back to the machine's zone.
 selected zone — UTC by default — instead of the machine's zone. The
 layout and the design are untouched.
 
-#### 16. The appearance function read the store behind the caller's back — FIXED
+#### 17. The appearance function read the store behind the caller's back — FIXED
 
 `applyTheme(value)` took the theme as a parameter but read the density
 from the global store. It worked because both call sites set the store
@@ -481,7 +522,7 @@ first, and it would have broken the first time anyone called it
 differently. It is now `applyAppearance(settings)`, with one source of
 truth.
 
-#### 17. A store was written but never read — FIXED
+#### 18. A store was written but never read — FIXED
 
 `settingsLoaded` was exported, set to true when the settings arrived,
 and read by nothing. Removed.

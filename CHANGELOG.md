@@ -19,6 +19,17 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 
 ### Fixed
 
+- **After the application restarted, the first approval decision failed.**
+  The identifier counter is a process-local atomic that starts at one in
+  every new process, and the database still held the identifiers the
+  previous process had minted. The new process was therefore handed an
+  identifier that was already in use, and the write failed on the primary
+  key with *"UNIQUE constraint failed: approval_decisions.id"*. The same
+  applied to every audit event.
+  The counter is now advanced past every identifier already stored when
+  the database is opened. The application is restarted far more often
+  than it is reset, so this was reachable in normal use.
+
 - **The application had no palette on its first paint.** The colours live
   only in `html[data-theme="dark"]` and `html[data-theme="light"]`, and
   the theme attribute was set after the settings had loaded
