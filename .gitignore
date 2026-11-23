@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# the frontend bundle
+dist/
+
+# the Rust build tree
+src-tauri/target/
+src-tauri/gen/
+
+# the mobile icon sets. This is a desktop application, and every icon is
+# regenerated from icons/source.png, which is the committed source of truth.
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
+# the macOS bundle, if it is ever produced outside target/
+*.dmg
+*.app
+
+# local environment and editor state
+.env
+.env.*
+!.env.example
+*.local
+.DS_Store
+.idea/
+.vscode/
