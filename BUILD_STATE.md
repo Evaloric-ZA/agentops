@@ -621,3 +621,39 @@ These are genuinely outside v0.1 and are recorded rather than hidden.
 ## Remaining
 
 Nothing is outstanding. Every acceptance command has been run and passes.
+
+## The v0.1.1 release
+
+The release is cut from the `fix/v0.1.1-hardening` branch, which is
+merged into `main` with `--no-ff` so the release boundary is visible in
+the history, then tagged `v0.1.1` and published as a GitHub release whose
+notes are the `0.1.1` section of `CHANGELOG.md`.
+
+The tag is made on the merge commit, not on the branch head, so the tag
+and `main` always name the same tree.
+
+The branch was verified before the merge in three ways:
+
+- the sweep passes thirteen of thirteen, locally;
+- the continuous integration passes all three jobs — the sweep on
+  `ubuntu-latest`, the sweep on `macos-latest`, and the minimum supported
+  Rust job — on the branch head;
+- the sweep passes again on the merge commit on `main`, before the tag is
+  made.
+
+The continuous integration conclusions are read from the job list and the
+test summaries in the logs, never from the badge alone.
+
+### What the release contains
+
+| | v0.1.0 | v0.1.1 |
+|---|---|---|
+| Rust tests | 33 | 41 |
+| Frontend tests | 36 | 42 |
+| Sweep checks | 8 | 13 |
+| Scanner regression cases | 20 | 28 |
+| Screens | 12 | 12 |
+| Typed commands | 24 | 24 |
+
+No screen changed, no command was added or removed, and the database
+schema did not change: a v0.1 database opens as a v0.1.1 database.
