@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDateTime,
   formatDuration,
   formatNumber,
   formatPercent,
@@ -7,6 +8,7 @@ import {
   formatTime,
   initials,
   parseDate,
+  setDisplayTimeZone,
   statusLabel,
 } from "../lib/format";
 
@@ -18,6 +20,50 @@ describe("formatTime", () => {
   it("shows a placeholder for an invalid timestamp rather than NaN", () => {
     expect(formatTime("not-a-time")).toBe("--:--");
     expect(formatTime("")).toBe("--:--");
+  });
+
+  it("shows the time in the zone it is given", () => {
+    // The same instant, two zones. Johannesburg is two hours ahead of
+    // UTC, so the two renderings differ.
+    const iso = "2026-01-01T12:30:00Z";
+    expect(formatTime(iso, "UTC")).not.toBe(formatTime(iso, "Africa/Johannesburg"));
+    expect(formatTime(iso, "UTC")).not.toBe(formatTime(iso, "Asia/Tokyo"));
+  });
+
+  it("falls back to the machine's zone when the zone is unusable", () => {
+    // The backend accepts any IANA-shaped name, and Intl throws a
+    // RangeError on a zone it does not know. A bad zone must not take
+    // the view down.
+    expect(() => formatTime("2026-01-01T12:30:00Z", "not/a/zone")).not.toThrow();
+    expect(formatTime("2026-01-01T12:30:00Z", "not/a/zone")).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it("uses the configured display zone when none is given", () => {
+    const iso = "2026-01-01T12:30:00Z";
+    // With no zone configured the machine's own zone is used.
+    const machine = formatTime(iso);
+    setDisplayTimeZone("UTC");
+    const inUtc = formatTime(iso);
+    setDisplayTimeZone("Asia/Tokyo");
+    const inTokyo = formatTime(iso);
+    setDisplayTimeZone(undefined);
+    expect(inUtc).not.toBe(inTokyo);
+    expect(formatTime(iso)).toBe(machine);
+  });
+});
+
+describe("formatDateTime", () => {
+  it("shows the date and time in the zone it is given", () => {
+    const iso = "2026-01-01T12:30:00Z";
+    expect(formatDateTime(iso, "UTC")).not.toBe(formatDateTime(iso, "Asia/Tokyo"));
+  });
+
+  it("shows a placeholder for an invalid timestamp", () => {
+    expect(formatDateTime("not-a-time")).toBe("unknown");
+  });
+
+  it("falls back rather than throwing on an unusable zone", () => {
+    expect(() => formatDateTime("2026-01-01T12:30:00Z", "not/a/zone")).not.toThrow();
   });
 });
 

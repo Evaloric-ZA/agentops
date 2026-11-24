@@ -14,8 +14,8 @@ Rust is installed with `rustup`. The frontend toolchain is Node 20 or newer.
 
 `cargo tauri build` invokes a binary named `cargo-tauri`, but the npm
 `@tauri-apps/cli` package installs one named `tauri`. `scripts/verify.sh`
-recreates a three-line bridge at `node_modules/.bin/cargo-tauri` after
-`npm ci`, so the documented command works verbatim:
+recreates a three-line bridge at `node_modules/.bin/cargo-tauri`, so the
+documented command works verbatim:
 
 ```bash
 export PATH="$PWD/node_modules/.bin:$PATH"
@@ -24,6 +24,23 @@ cargo tauri build --debug
 
 Installing the Rust CLI instead (`cargo install tauri-cli --version "^2"`)
 makes the bridge unnecessary.
+
+The bridge has to be created **after** `npm ci`. `npm ci` removes
+`node_modules` and installs it again, so a bridge written before it runs is
+deleted along with everything else. The sweep creates it after `npm ci`
+and again immediately before the native build.
+
+### The sweep builds the application, but does not bundle it
+
+`scripts/verify.sh` runs `cargo tauri build --debug --no-bundle`. That
+compiles and links the application without the platform bundler, which
+keeps the check usable on a machine with no interactive session and
+without downloading bundler tooling.
+
+It is deliberately **not** the same as producing an installer. The
+`.app`, the `.dmg` and the Linux packages come from a separate
+`cargo tauri build` run, and on macOS the `.dmg` step needs an
+interactive Finder session.
 
 ## Development build
 

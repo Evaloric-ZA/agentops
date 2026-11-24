@@ -36,6 +36,7 @@ impl Database {
         let mut db = Database { conn };
         db.configure()?;
         db.migrate()?;
+        db.observe_stored_ids()?;
         Ok(db)
     }
 
@@ -46,7 +47,38 @@ impl Database {
         let mut db = Database { conn };
         db.configure()?;
         db.migrate()?;
+        db.observe_stored_ids()?;
         Ok(db)
+    }
+
+    /// Advance the identifier counter past every identifier already stored.
+    ///
+    /// The counter is a process-local atomic that starts at one in every
+    /// new process. The database, however, still holds the identifiers the
+    /// previous process minted, so without this the new process would be
+    /// handed an identifier that is already in use and the write would fail
+    /// on the primary key.
+    ///
+    /// Only the identifiers the counter mints are considered. The seeded
+    /// ones use their own prefixes, and the simulator's event identifiers
+    /// are derived from the step counter rather than from this one.
+    fn observe_stored_ids(&self) -> AppResult<()> {
+        let highest: Option<i64> = self.conn.query_row(
+            "SELECT MAX(CAST(SUBSTR(id, INSTR(id, '-') + 1) AS INTEGER))
+               FROM (
+                   SELECT id FROM audit_events WHERE id GLOB 'audit-[0-9]*'
+                   UNION ALL
+                   SELECT id FROM approval_decisions WHERE id GLOB 'decision-[0-9]*'
+               )",
+            [],
+            |row| row.get(0),
+        )?;
+        if let Some(value) = highest {
+            if value > 0 {
+                crate::domain::ids::observe_counter(value as u64);
+            }
+        }
+        Ok(())
     }
 
     fn configure(&self) -> AppResult<()> {

@@ -5,24 +5,70 @@
 
 import type { RunStatus } from "../domain/types";
 
+/**
+ * The zone the timestamps are displayed in.
+ *
+ * It is set from the persisted settings, so the Timezone control in
+ * Settings has an effect. The formatters stay pure when a zone is passed
+ * to them explicitly, which is how the tests use them.
+ */
+let displayTimeZone: string | undefined;
+
+/** Set the zone the timestamps are displayed in. */
+export function setDisplayTimeZone(zone: string | undefined): void {
+  displayTimeZone = zone;
+}
+
+/**
+ * Check a zone before it is used.
+ *
+ * The backend accepts any IANA-shaped name, and `Intl` throws a
+ * RangeError on a zone it does not know. A bad zone must not take the
+ * view down, so an unusable one falls back to the machine's own zone.
+ */
+function usableZone(zone: string | undefined): string | undefined {
+  if (!zone) return undefined;
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: zone });
+    return zone;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Format an RFC 3339 timestamp as a local time, e.g. "14:32". */
-export function formatTime(iso: string): string {
+export function formatTime(iso: string, timeZone?: string): string {
   const date = parseDate(iso);
   if (!date) return "--:--";
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const zone = usableZone(timeZone ?? displayTimeZone);
+  try {
+    return date.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(zone ? { timeZone: zone } : {}),
+    });
+  } catch {
+    return "--:--";
+  }
 }
 
 /** Format an RFC 3339 timestamp as a local date and time. */
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string, timeZone?: string): string {
   const date = parseDate(iso);
   if (!date) return "unknown";
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const zone = usableZone(timeZone ?? displayTimeZone);
+  try {
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(zone ? { timeZone: zone } : {}),
+    });
+  } catch {
+    return "unknown";
+  }
 }
 
 /** A short "3m ago" style description of how long ago a moment was. */

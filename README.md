@@ -7,6 +7,8 @@ agent registry, a run timeline, and the approvals that need a human.
 **Version 0.1 is a local proof of architecture.** Every record in it is
 synthetic. Nothing here connects to a real agent, a real model, or any
 network service, and no installer for a production deployment is implied.
+v0.1.1 is a maintenance release: no feature is added, no screen changes,
+and the data model is unchanged.
 
 ## What it is
 
@@ -70,7 +72,10 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-features
 bash scripts/verify.sh
 ```
 
-`scripts/verify.sh` runs the whole sweep and prints one line per check.
+`scripts/verify.sh` runs the whole sweep and prints one line per check:
+eleven of them, covering the frontend, the Rust, the native build, the
+version agreement between the manifests, the privacy scan and the privacy
+scan's own regression test.
 
 ## Documentation
 
@@ -81,6 +86,7 @@ bash scripts/verify.sh
 - [docs/TESTING.md](docs/TESTING.md) — what is tested and how
 - [docs/PACKAGING.md](docs/PACKAGING.md) — prerequisites, build commands and
   outputs
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each release
 
 ## Scope
 

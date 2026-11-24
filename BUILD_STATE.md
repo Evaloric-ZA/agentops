@@ -36,7 +36,7 @@ what was fixed, and what is still open. Updated after each phase.
 - [x] `simulator/mod.rs` — the deterministic simulator
 - [x] `commands/` — dashboard, agents, runs, approvals, audit, policies,
       tools, team, settings, simulator
-- [x] `commands_api.rs` — the 24 Tauri commands
+- [x] `commands_api.rs` — the 23 Tauri commands
 - [x] `error.rs` — structured errors with stable codes
 - [x] `util.rs` — UTC time helpers
 
@@ -48,7 +48,7 @@ what was fixed, and what is still open. Updated after each phase.
    (`r#"["artifact-{run_index}.txt"]"#`).
 
 2. **`rusqlite::Connection` is `Send` but not `Sync`,** so
-   `tauri::State<'_, AppState>` did not satisfy `CommandArg` and 24 commands
+   `tauri::State<'_, AppState>` did not satisfy `CommandArg` and 23 commands
    failed to compile. Fixed by holding the `Database` in a `Mutex` inside
    `AppState` and taking the lock once per command. The lock is held for the
    whole command, so a read and the write that follows it are atomic with
@@ -282,6 +282,401 @@ its content on `status === "loaded"`. All twelve routes verified:
 | Crew | 1 | yes |
 | Settings | — | a form view; errors surface through the shell error banner |
 
+## Phase 7 — The v0.1.1 maintenance release
+
+### The inspection facts
+
+Recorded before anything was edited, as the release required.
+
+| Fact | Value |
+|---|---|
+| The branch | `main`, then `fix/v0.1.1-hardening` |
+| The commit | `73a1b7cc63ebe460156b3ac6afe2794c5c9ba06d` |
+| The working tree | clean |
+| Rust | `rustc 1.93.1 (01f6ddf75 2026-02-11)` |
+| Cargo | `cargo 1.93.1 (083ac5135 2025-12-15)` |
+| Node | `v26.13.1` |
+| npm | `11.20.0` |
+| macOS | `26.5.2` (build `25F84`), `arm64` |
+| The Tauri CLI | `tauri-cli 2.12.6` |
+
+The complete tree was enumerated: **94 tracked files**. The generated
+output — `node_modules`, `src-tauri/target`, `dist`, `src-tauri/gen`, the
+mobile icon sets and the `.DS_Store` files — is excluded by `.gitignore`
+and was not inspected as source.
+
+### Findings, and what was done about each
+
+Every finding below was **reproduced against the source** before it was
+changed. Nothing was changed on the strength of a report alone.
+
+#### 1. The privacy scanner missed secrets in files it did not recognise — FIXED
+
+`scripts/verify_repo.py` scanned only the suffixes in a fixed list.
+A secret written into a `.sh`, `.env`, `.lock` or `.py` file was not
+detected, because those suffixes were not on the list.
+
+Reproduced by writing a fake secret into each of those files in a copy of
+the tree and running the scanner: it reported *"Repository structure and
+privacy scan passed"* for all four.
+
+The scanner now reads every file in the tree and scans it if it decodes as
+UTF-8 and holds no NUL byte, so a file's name cannot decide whether it is
+checked.
+
+#### 2. The privacy scanner missed the two commonest shapes of a secret — FIXED
+
+The pattern required a quoted value and a bare key, so the usual unquoted
+`.env` form (`API_KEY=sk-live-...`) and the usual quoted JSON form
+(`{"api_key": "sk-live-..."}`) both passed. The `credential` and `passwd`
+key names were not recognised at all.
+
+The pattern now accepts a quoted or bare key and a quoted or bare value,
+and recognises the six key names.
+
+#### 3. The scanner had no test of its own — ADDED
+
+`scripts/test_verify_repo.py` — twenty cases, standard library only, runs
+with a plain `python3`. Each case builds a throwaway tree and asserts
+what the scanner does with it. It is part of the sweep.
+
+#### 4. The version could drift between the manifests — FIXED
+
+`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and
+the `agentops` entry in `src-tauri/Cargo.lock` all carry the version, and
+nothing forced them to agree. The application does not display its version
+anywhere, so the drift would have been invisible to the operator and to
+anyone reading a bug report.
+
+Reproduced by changing `package.json` to 0.1.1 and leaving the other
+three at 0.1.0: nothing in the tree noticed.
+
+`scripts/check_version.py` now reads all four and fails if they disagree.
+It is part of the sweep. It caught the real drift during this release —
+`Cargo.lock` still said 0.1.0 after the other three were bumped.
+
+#### 5. The sweep never built the application — FIXED
+
+`cargo test` compiles the library and the binary, but the sweep never ran
+the Tauri build, so a tree that could not be assembled as an application
+still passed the sweep.
+
+The sweep now runs `cargo tauri build --debug --no-bundle`, which
+compiles and links the application without the platform bundler — the
+bundler needs an interactive session on macOS and downloads tooling on
+Linux.
+
+#### 6. The `cargo-tauri` bridge was created before `npm ci` — FIXED
+
+This was a defect introduced by the change in finding 5 and caught by
+running it. `npm ci` removes `node_modules` and installs it again, so the
+bridge written before it ran was deleted along with everything else, and
+the native build failed with *"no such command: `tauri`"*.
+
+The bridge is now created after `npm ci` and again immediately before the
+native build.
+
+#### 7. The continuous integration actions floated on tags — FIXED
+
+`actions/checkout@v4` and `actions/setup-node@v4` were tag references. A
+moved tag would change what the build runs. Both are now pinned to a
+commit, with the tag in a comment.
+
+#### 8. CI had no concurrency group and asked for more permission than it needed — FIXED
+
+A superseded run now cancels instead of competing for a runner, and the
+workflow asks for `contents: read` only.
+
+#### 9. The minimum supported Rust was declared but never verified — FIXED
+
+`src-tauri/Cargo.toml` declares `rust-version = "1.77"`, and nothing
+checked the claim. A CI job now compiles the crate on that toolchain.
+
+#### 10. There was no changelog and no release note — ADDED
+
+`CHANGELOG.md`, in Keep a Changelog format. The release history was
+otherwise only in the commit messages.
+
+#### 11. The declared minimum supported Rust was false — FIXED
+
+`src-tauri/Cargo.toml` declared `rust-version = "1.77"`. The first run
+of the new CI job failed with *"feature `edition2024` is required"* —
+`tauri` itself requires Rust 1.90, and 112 packages in the resolved
+graph need more than 1.77.
+
+`cargo metadata` was asked for the minimum every dependency declares;
+the highest is **1.90**, set by `tauri`, `tauri-build`, `tauri-codegen`,
+`tauri-macros`, `tauri-runtime`, `tauri-runtime-wry`, `tauri-utils`,
+`muda` and `tray-icon`.
+
+Both ends were then verified on this machine: `cargo +1.77 check` fails
+with `rc=101`, and `cargo +1.90 check` succeeds with `rc=0`.
+
+The claim is now 1.90, and `scripts/check_msrv.py` compares the declared
+minimum against the resolved graph on every sweep, so a false claim is
+caught locally rather than only on a CI runner.
+
+#### 12. The CI workflow was broken by its own hardening — FIXED
+
+Pinning `dtolnay/rust-toolchain` to a commit removed the `@stable`
+ref's meaning: the action reads the toolchain from its `toolchain`
+input, not from the ref it is referenced by. All three jobs failed
+immediately with *"'toolchain' is a required input"*. The input is now
+given explicitly.
+
+#### 13. After a restart, the first approval decision failed — FIXED
+
+This is the most serious defect found in the release.
+
+The identifier counter (`src-tauri/src/domain/ids.rs`) is a process-local
+`AtomicU64` that starts at one in every new process. The database, however,
+still holds the identifiers the previous process minted. The counter was
+never advanced past what was stored — `observe_counter` existed for exactly
+that purpose and was **never called** — so the new process was handed an
+identifier that was already in use.
+
+The identifiers the counter mints are `audit-{n:06}` and `decision-{n:06}`,
+and both are primary keys. The simulator's own event identifiers are
+derived from the step counter (`sim-event-{step}-{n}`) and are unaffected.
+
+Reproduced live, before the fix:
+
+```
+the first decision after a restart failed: Some(Database(SqliteFailure(
+  Error { code: ConstraintViolation, extended_code: 1555 },
+  Some("UNIQUE constraint failed: approval_decisions.id"))))
+```
+
+and the same for `audit_events.id`.
+
+The application is restarted far more often than it is reset, so this was
+reachable in ordinary use: an operator who approved something, quit the
+application and opened it again could not approve or reject anything
+afterwards.
+
+`Database::open` and `Database::open_memory` now advance the counter past
+the highest identifier already stored. The regression test is an
+**integration** test — `src-tauri/tests/restart_ids.rs` — because it opens
+a database on disk and resets the process-local counter, which must not
+race the unit tests that share theirs.
+
+The test was verified to catch the defect: removing the two
+`observe_stored_ids()` call sites makes both integration tests fail with
+the same constraint violations, and the restore was checked byte for byte
+with SHA-256.
+
+#### 14. The sweep assumed the caller had set the PATH — FIXED
+
+`cargo tauri` looks for a binary named `cargo-tauri`, which lives in
+`node_modules/.bin`. The sweep created the bridge there but never put
+the directory on the PATH. On a CI runner — where `node_modules/.bin` is
+not on the PATH — the native build failed in twenty milliseconds with
+*"no such command: `tauri`"*. The local runs had not caught it because
+the shell wrapper had exported the PATH.
+
+The sweep now exports the PATH itself. Verified by running the whole
+sweep with `node_modules/.bin` removed from the PATH: **12 passed, 0
+failed.**
+
+#### 15. The application had no palette on its first paint — FIXED
+
+The colours are defined only in `html[data-theme="dark"]` and
+`html[data-theme="light"]`; the `:root` block holds fonts, radii,
+spacing and transitions but no colour. The theme attribute was set by
+`applyTheme`, which was called from `loadSettings` — an asynchronous
+call made after the first mount.
+
+So between the first paint and the settings arriving, `<html>` had no
+`data-theme` attribute and therefore **no colour variables at all**. Every
+`var(--bg-base)` and every other colour resolved to nothing.
+
+`<html>` now carries `data-theme="dark"` and `data-density="comfortable"`
+in `index.html`, before the first paint. The dark theme is the backend's
+default and the store's default, so this matches what the application
+would have applied a moment later. No stylesheet or component changed.
+
+#### 16. The Timezone setting did nothing — FIXED
+
+The setting was validated by the backend, offered by the Settings screen
+with eight IANA zones, persisted, and never used. The timestamps were
+formatted with `toLocaleTimeString(undefined, ...)`, which is the
+machine's own zone.
+
+`formatTime` and `formatDateTime` now take the zone into account. The
+zone comes from the persisted settings, so the control has an effect.
+
+An unusable zone cannot take the view down: `Intl` throws a
+`RangeError` on a zone it does not know, and the backend accepts any
+name containing a slash. The zone is checked before it is used, and an
+unusable one falls back to the machine's zone.
+
+**This changes what is displayed.** Timestamps now render in the
+selected zone — UTC by default — instead of the machine's zone. The
+layout and the design are untouched.
+
+#### 17. The appearance function read the store behind the caller's back — FIXED
+
+`applyTheme(value)` took the theme as a parameter but read the density
+from the global store. It worked because both call sites set the store
+first, and it would have broken the first time anyone called it
+differently. It is now `applyAppearance(settings)`, with one source of
+truth.
+
+#### 18. A store was written but never read — FIXED
+
+`settingsLoaded` was exported, set to true when the settings arrived,
+and read by nothing. Removed.
+
+#### 19. The privacy scanner missed key names with an underscore — FIXED
+
+The key alternation ended in a word boundary, and `_` is a word character,
+so `SECRET_KEY`, `DB_PASSWORD`, `PASSWORD_FILE` and `secret_key` were all
+passed. Verified live against the scanner before the fix: all four missed.
+
+The key may now carry a prefix or a suffix. The separators are explicit,
+so a word that merely starts with one of the names — `tokenizer` — is not
+treated as a key. Six cases were added to the scanner's own regression
+test, which now has twenty-eight.
+
+#### 20. The simulator was changing the seeded data — FIXED
+
+The simulator advanced, failed and completed the **seeded** runs, and
+attached its approvals to seeded runs that already carried one.
+
+Reproduced live with a probe that ticked the simulator and printed the
+runs and the approvals after every step. The first probe showed the
+simulator failing seeded `run-000007` — a run with a pending approval on
+it — and then completing another seeded run. The seeded approvals were
+left pending on a run that had already failed.
+
+`active_run` now considers only the simulator's own runs, whose identifiers
+begin `sim-run-`.
+
+#### 21. The simulator's six phases belonged to six different agents — FIXED
+
+The phase and the agent were both derived from the step. The phase cycle
+is documented as create, advance, advance, approval, fail, complete, and
+those six phases belong to one run — but the run was created for one agent
+and the next phase looked for a run belonging to a different one. The
+probe showed steps two, three, seven and eight all doing nothing.
+
+The agent is now chosen by the cycle rather than by the step, and the
+phases are counted from the first tick, so the cycle begins with the
+create. The probe now shows created, advanced, advanced, approval.
+
+#### 22. The simulator failed runs that were waiting on a decision — FIXED
+
+The fail phase failed the run a tick after the approval phase raised an
+approval on it, so the approval was left pending on a run that had already
+failed. A run cannot be failed behind the operator's back, so it now waits
+until the decision is made, and the complete phase leaves it alone too.
+
+#### 23. A rejected run was left looking as though it were still running — FIXED
+
+The reject path set the run's status but not its end time or its
+duration, unlike the simulator's own failure path. The run detail view
+reads "still running" when the end time is missing, so a rejected run
+said so.
+
+#### 24. A decided approval left the agent waiting — FIXED
+
+The decision path updated the approval, the decision record, the audit
+record and the run, but never the agent — so an agent stayed in the
+`approval` state for good. An approved run now continues and its agent
+goes back to work; a rejected run stops and its agent stops with it.
+
+The decision also no longer resurrects a run that has already finished:
+the decision is recorded whatever the run has become, because it is a fact
+about what the operator did, but a run that has already failed is not moved
+back to running.
+
+#### 25. A tick that failed part way through left the simulator wedged — FIXED
+
+An independent audit of the Rust backend found this, and proved it by
+injecting a conflicting `run_events` primary key. The tick returned an
+error, yet one run and four stages were already committed while the step
+counter stayed at five. Every retry hit the same primary key, so the
+simulator was permanently stuck.
+
+`tick` called `apply_step` and then wrote the step counter as two
+separate auto-commit units, and `apply_step` performs many independent
+statements. The step and everything it writes are now one transaction:
+if any part of the step fails, nothing is committed and the step is not
+consumed, so the next tick tries the same step from the same state.
+
+#### 26. Enabling a policy that does not exist reported success — FIXED
+
+The update matched no rows and the command returned `Ok(())`, so the
+frontend showed a successful toggle for a policy that is not there. The
+number of affected rows is now checked, and a policy that does not exist
+is reported as not found.
+
+#### 27. The wildcards in a search were matched as wildcards — FIXED
+
+The search term was interpolated into a `LIKE` pattern unescaped, so
+searching for `%` or `_` matched every run. The value was bound as a
+parameter, so this was never an injection — the search simply did not
+match what was asked for. The metacharacters are now escaped and the
+pattern declares its escape character.
+
+#### 28. A reset was not reproducible — FIXED
+
+The seed wrote the wall clock into `seeded_at`, so every re-seed stored a
+different value, while the seed's own documentation claimed the data was
+anchored to a fixed instant so that "reset demo data" reproduces
+byte-for-byte the same state. The seed now records the anchor it was
+given.
+
+#### 29. A database fault was reported as a missing approval — FIXED
+
+The approval state query discarded its error, so any database problem
+became `None`, which became "record not found". The operator was sent
+looking for a missing approval when the real cause was a database fault.
+Only a missing row is now reported as missing; anything else stays a
+database error.
+
+#### 30. An identifier was measured in bytes while its message said characters — FIXED
+
+The length check counted bytes and the message said characters. The
+validator only accepts ASCII, so the difference never changed whether an
+input was accepted — it changed only *which* refusal explained why. A
+hundred accented letters is a hundred characters, not eight hundred
+bytes, so the length rule must not be the one that speaks. The check now
+counts characters.
+
+#### 31. The documentation claimed twenty-four commands — FIXED
+
+There are twenty-three `#[tauri::command]` attributes, twenty-three
+entries in the handler, and twenty-three calls in the frontend — an exact
+three-way match. Four places in the documentation said twenty-four.
+
+#### 32. The icon set could not be regenerated from its documented source — FIXED
+
+The `.gitignore` says every icon is regenerated from `icons/source.png`,
+which is the committed source of truth. But the tree carried a renamed
+double-resolution icon, so running the icon generator again produced a
+different tree and reintroduced a file the scanner flagged as an email
+address.
+
+The conventional name is back, the configuration points at it, and the
+privacy scanner now excludes the image extensions instead of treating any
+file name containing an `@` and a three-letter extension as an address.
+Verified: the icon file name is clean, a real address is still caught,
+and the scanner's own twenty-eight regression cases still pass.
+
+### Verified and deliberately not changed
+
+- **The data model is untouched.** No migration was added, so a v0.1
+  database opens as a v0.1.1 database with no conversion step.
+- **The visual design is untouched.** No stylesheet, component or route
+  was changed. The twelve screens, the navigation and the hierarchy are
+  as they were.
+- **The capability set is still `core:default` and nothing else.**
+- **The application still makes no network request** and still has no
+  filesystem, shell, process, HTTP, clipboard or updater permission.
+- **The simulator is still deterministic** and still driven from the
+  frontend.
+
 ## Known limitations
 
 These are genuinely outside v0.1 and are recorded rather than hidden.
@@ -300,3 +695,39 @@ These are genuinely outside v0.1 and are recorded rather than hidden.
 ## Remaining
 
 Nothing is outstanding. Every acceptance command has been run and passes.
+
+## The v0.1.1 release
+
+The release is cut from the `fix/v0.1.1-hardening` branch, which is
+merged into `main` with `--no-ff` so the release boundary is visible in
+the history, then tagged `v0.1.1` and published as a GitHub release whose
+notes are the `0.1.1` section of `CHANGELOG.md`.
+
+The tag is made on the merge commit, not on the branch head, so the tag
+and `main` always name the same tree.
+
+The branch was verified before the merge in three ways:
+
+- the sweep passes thirteen of thirteen, locally;
+- the continuous integration passes all three jobs — the sweep on
+  `ubuntu-latest`, the sweep on `macos-latest`, and the minimum supported
+  Rust job — on the branch head;
+- the sweep passes again on the merge commit on `main`, before the tag is
+  made.
+
+The continuous integration conclusions are read from the job list and the
+test summaries in the logs, never from the badge alone.
+
+### What the release contains
+
+| | v0.1.0 | v0.1.1 |
+|---|---|---|
+| Rust tests | 33 | 41 |
+| Frontend tests | 36 | 42 |
+| Sweep checks | 8 | 13 |
+| Scanner regression cases | 20 | 28 |
+| Screens | 12 | 12 |
+| Typed commands | 23 | 23 |
+
+No screen changed, no command was added or removed, and the database
+schema did not change: a v0.1 database opens as a v0.1.1 database.

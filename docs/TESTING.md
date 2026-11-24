@@ -40,6 +40,10 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-features
 
+python3 scripts/check_version.py .
+python3 scripts/test_verify_repo.py
+cargo tauri build --debug --no-bundle
+
 bash scripts/verify.sh
 ```
 
@@ -48,11 +52,52 @@ covers both the TypeScript and the Svelte template diagnostics.
 
 `cargo clippy` runs with `-D warnings`, so a single warning fails the build.
 
+`scripts/verify.sh` runs all of the above and prints one line per check.
+There are thirteen:
+
+| Check | Proves |
+|---|---|
+| `npm ci` | The lockfile is sufficient on its own |
+| `npm run check` | The type and template diagnostics are clean |
+| `npm test` | The frontend unit tests pass |
+| `npm run build` | The production bundle assembles |
+| `cargo fmt --check` | The Rust is formatted |
+| `cargo clippy` | The Rust is idiomatic; one warning fails the build |
+| `cargo test` | The Rust unit tests pass |
+| the version check | Every manifest agrees on the version |
+| the minimum supported Rust check | The declared minimum compiler is true |
+| the scanner's regression test | The privacy scanner still catches what it must |
+| the type vocabulary check | The Rust enums and the TypeScript unions agree |
+| the native build | The application compiles and links as an application |
+| the privacy verifier | The required paths exist and nothing is embedded |
+
 ## The privacy check
 
-`scripts/verify.sh` runs the skill's repository verifier, which asserts the
-required paths exist and scans every text file for email addresses, private
-IPv4 ranges, bearer tokens and secret assignments.
+`scripts/verify_repo.py` asserts the required paths exist and scans the
+tree for email addresses, private IPv4 ranges, bearer tokens and secret
+assignments.
+
+The scan is **extension-blind**: it reads every file and scans it if it
+decodes as UTF-8 and holds no NUL byte. An earlier version scanned only a
+list of known text suffixes, and that was a real false negative — a secret
+in a `.sh`, `.env`, `.lock` or `.py` file was not detected. It also
+required a quoted value and a bare key, so the usual unquoted `.env` form
+and the usual quoted JSON form both passed.
+
+`scripts/test_verify_repo.py` is the scanner's own regression test: twenty-
+eight cases, each building a throwaway tree and asserting what the scanner
+does with it. It runs with a plain `python3` and needs no third-party
+package.
+
+## The type vocabulary check
+
+`scripts/check_types.py` compares the Rust domain enums with the
+TypeScript string unions that mirror them — `AgentStatus`, `RunStatus`,
+`ApprovalState` and `Severity`. A value added on one side and forgotten
+on the other is not a compile error: the backend would send a value the
+frontend's union does not contain, and the frontend would treat it as an
+unknown member. The check reads both sides and compares them, and the
+sweep runs it.
 
 ## Manual checks
 

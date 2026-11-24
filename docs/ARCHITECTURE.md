@@ -47,7 +47,7 @@ agentops/
 │   └── src/
 │       ├── main.rs             a thin binary
 │       ├── lib.rs              the application builder
-│       ├── commands_api.rs     the 24 Tauri commands
+│       ├── commands_api.rs     the 23 Tauri commands
 │       ├── commands/           the command implementations
 │       ├── db/                 the connection, migrations and records
 │       ├── domain/             the canonical types
@@ -56,7 +56,12 @@ agentops/
 │       ├── simulator/          the deterministic simulator
 │       └── util.rs             UTC time helpers
 ├── docs/
-└── scripts/verify.sh
+├── CHANGELOG.md
+└── scripts/
+    ├── verify.sh                 the sweep: eleven checks, one line each
+    ├── verify_repo.py            the structure and privacy scan
+    ├── test_verify_repo.py       the privacy scan's own regression test
+    └── check_version.py          the manifests must agree on the version
 ```
 
 ## The boundary
@@ -131,3 +136,13 @@ happens, so the same step always produces the same event. The phase cycle is
 create, advance, advance, approval, fail, complete. Resetting restores the
 seed and rewinds the counter, so a replay reproduces the same sequence —
 including the same identifiers.
+
+Two rules keep the simulation honest. The six phases of a cycle belong to
+**one agent and one run**: the agent is chosen by the cycle, not by the
+step, so the run is created, advanced and finally resolved as a single
+piece of work. And the simulator only ever acts on its **own** runs, whose
+identifiers begin `sim-run-`; the seeded runs are the fixed baseline the
+operator sees, and the simulation never advances, fails or completes them.
+
+A run that is waiting on a human decision is neither failed nor completed
+behind the operator's back. It waits until the decision is made.
