@@ -36,7 +36,7 @@ what was fixed, and what is still open. Updated after each phase.
 - [x] `simulator/mod.rs` — the deterministic simulator
 - [x] `commands/` — dashboard, agents, runs, approvals, audit, policies,
       tools, team, settings, simulator
-- [x] `commands_api.rs` — the 24 Tauri commands
+- [x] `commands_api.rs` — the 23 Tauri commands
 - [x] `error.rs` — structured errors with stable codes
 - [x] `util.rs` — UTC time helpers
 
@@ -48,7 +48,7 @@ what was fixed, and what is still open. Updated after each phase.
    (`r#"["artifact-{run_index}.txt"]"#`).
 
 2. **`rusqlite::Connection` is `Send` but not `Sync`,** so
-   `tauri::State<'_, AppState>` did not satisfy `CommandArg` and 24 commands
+   `tauri::State<'_, AppState>` did not satisfy `CommandArg` and 23 commands
    failed to compile. Fixed by holding the `Database` in a `Mutex` inside
    `AppState` and taking the lock once per command. The lock is held for the
    whole command, so a read and the write that follows it are atomic with
@@ -590,6 +590,80 @@ the decision is recorded whatever the run has become, because it is a fact
 about what the operator did, but a run that has already failed is not moved
 back to running.
 
+#### 25. A tick that failed part way through left the simulator wedged — FIXED
+
+An independent audit of the Rust backend found this, and proved it by
+injecting a conflicting `run_events` primary key. The tick returned an
+error, yet one run and four stages were already committed while the step
+counter stayed at five. Every retry hit the same primary key, so the
+simulator was permanently stuck.
+
+`tick` called `apply_step` and then wrote the step counter as two
+separate auto-commit units, and `apply_step` performs many independent
+statements. The step and everything it writes are now one transaction:
+if any part of the step fails, nothing is committed and the step is not
+consumed, so the next tick tries the same step from the same state.
+
+#### 26. Enabling a policy that does not exist reported success — FIXED
+
+The update matched no rows and the command returned `Ok(())`, so the
+frontend showed a successful toggle for a policy that is not there. The
+number of affected rows is now checked, and a policy that does not exist
+is reported as not found.
+
+#### 27. The wildcards in a search were matched as wildcards — FIXED
+
+The search term was interpolated into a `LIKE` pattern unescaped, so
+searching for `%` or `_` matched every run. The value was bound as a
+parameter, so this was never an injection — the search simply did not
+match what was asked for. The metacharacters are now escaped and the
+pattern declares its escape character.
+
+#### 28. A reset was not reproducible — FIXED
+
+The seed wrote the wall clock into `seeded_at`, so every re-seed stored a
+different value, while the seed's own documentation claimed the data was
+anchored to a fixed instant so that "reset demo data" reproduces
+byte-for-byte the same state. The seed now records the anchor it was
+given.
+
+#### 29. A database fault was reported as a missing approval — FIXED
+
+The approval state query discarded its error, so any database problem
+became `None`, which became "record not found". The operator was sent
+looking for a missing approval when the real cause was a database fault.
+Only a missing row is now reported as missing; anything else stays a
+database error.
+
+#### 30. An identifier was measured in bytes while its message said characters — FIXED
+
+The length check counted bytes and the message said characters. The
+validator only accepts ASCII, so the difference never changed whether an
+input was accepted — it changed only *which* refusal explained why. A
+hundred accented letters is a hundred characters, not eight hundred
+bytes, so the length rule must not be the one that speaks. The check now
+counts characters.
+
+#### 31. The documentation claimed twenty-four commands — FIXED
+
+There are twenty-three `#[tauri::command]` attributes, twenty-three
+entries in the handler, and twenty-three calls in the frontend — an exact
+three-way match. Four places in the documentation said twenty-four.
+
+#### 32. The icon set could not be regenerated from its documented source — FIXED
+
+The `.gitignore` says every icon is regenerated from `icons/source.png`,
+which is the committed source of truth. But the tree carried a renamed
+double-resolution icon, so running the icon generator again produced a
+different tree and reintroduced a file the scanner flagged as an email
+address.
+
+The conventional name is back, the configuration points at it, and the
+privacy scanner now excludes the image extensions instead of treating any
+file name containing an `@` and a three-letter extension as an address.
+Verified: the icon file name is clean, a real address is still caught,
+and the scanner's own twenty-eight regression cases still pass.
+
 ### Verified and deliberately not changed
 
 - **The data model is untouched.** No migration was added, so a v0.1
@@ -653,7 +727,7 @@ test summaries in the logs, never from the badge alone.
 | Sweep checks | 8 | 13 |
 | Scanner regression cases | 20 | 28 |
 | Screens | 12 | 12 |
-| Typed commands | 24 | 24 |
+| Typed commands | 23 | 23 |
 
 No screen changed, no command was added or removed, and the database
 schema did not change: a v0.1 database opens as a v0.1.1 database.

@@ -14,6 +14,17 @@ fn parse_status(value: &str) -> RunStatus {
     }
 }
 
+/// Escape the characters a LIKE pattern treats as metacharacters.
+///
+/// A search for "%" or "_" would otherwise match every row, because those
+/// are wildcards. The value is bound as a parameter, so this is not about
+/// injection: it is about the search matching what was asked for.
+fn escape_like(term: &str) -> String {
+    term.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// List runs, newest first, optionally filtered by status and searched by
 /// task or agent name.
 pub fn list(db: &Database, status: Option<String>, search: Option<String>) -> AppResult<Vec<Run>> {
@@ -29,8 +40,8 @@ pub fn list(db: &Database, status: Option<String>, search: Option<String>) -> Ap
         args.push(Box::new(status.to_string()));
     }
     if let Some(search) = search.as_deref().filter(|s| !s.trim().is_empty()) {
-        sql.push_str(" AND (r.task LIKE ? OR a.display_name LIKE ?)");
-        let pattern = format!("%{}%", search.trim());
+        sql.push_str(" AND (r.task LIKE ? ESCAPE '\\' OR a.display_name LIKE ? ESCAPE '\\')");
+        let pattern = format!("%{}%", escape_like(search.trim()));
         args.push(Box::new(pattern.clone()));
         args.push(Box::new(pattern));
     }

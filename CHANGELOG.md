@@ -27,6 +27,32 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 
 ### Fixed
 
+- **A tick that failed part way through left the simulator wedged.** The
+  step and everything it writes were two separate commits, so a failure
+  committed what had already been written while the step counter stayed
+  where it was. Every retry then hit the same fault and the simulator was
+  stuck for good. The step and its writes are now one transaction.
+- **Enabling a policy that does not exist reported success.** The update
+  matched no rows and the command said it had worked.
+- **The wildcards in a search were matched as wildcards.** Searching for
+  `%` or `_` returned every run. They are now matched literally.
+- **A reset was not reproducible.** The seed recorded the wall clock, so
+  every re-seed stored a different value and "reset demo data" did not
+  restore the same state. The seed now records the anchor it was given.
+- **A database fault was reported as a missing approval.** The state
+  query discarded its error, so a genuine database problem was reported
+  as "record not found" and sent the operator looking in the wrong place.
+- **An identifier was measured in bytes while its message said
+  characters.** The validator only accepts ASCII, so the difference shows
+  only in which refusal explains the problem.
+- **The documentation claimed twenty-four commands; there are
+  twenty-three.**
+- **The icon set could not be regenerated from its documented source.**
+  The tree carried a renamed double-resolution icon, so running the icon
+  generator again produced a different tree. The conventional name is
+  back, and the privacy scanner no longer mistakes an image file name for
+  an email address.
+
 - **The simulator was changing the seeded data.** It advanced, failed and
   completed the seeded runs, and attached its approvals to seeded runs
   that already carried one — so a run could show two approvals, and the
@@ -142,7 +168,7 @@ The first release.
   frontend, and SQLite persistence through `rusqlite`.
 - Twelve screens: Night Shift, Agents, Runs, Waiting on You, Policies,
   Access, Compute, Audit Log, Tools, Team, Settings and Crew.
-- Twenty-four typed Tauri commands. The frontend never receives a raw
+- Twenty-three typed Tauri commands. The frontend never receives a raw
   database error or a stack trace; every failure arrives as a stable code
   and a message that is safe to display.
 - A deterministic simulator driven from the frontend, so the operator

@@ -60,7 +60,15 @@ SKIP_DIRS = {"node_modules", "target", ".git", "dist", "gen", ".cache"}
 MAX_BYTES = 4 * 1024 * 1024
 
 PATTERNS = {
-    "email address": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I),
+    # The image extensions are excluded because an icon file name such as
+    # 128x128@2x.png is otherwise an email address. The conventional name
+    # is the one the icon generator emits, and the tree has to carry it
+    # for the icon set to be reproducible from its source.
+    "email address": re.compile(
+        r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\."
+        r"(?!png\b|jpe?g\b|gif\b|svg\b|webp\b|ico\b|icns\b|bmp\b|tiff?\b)[A-Z]{2,}\b",
+        re.I,
+    ),
     "private IPv4 address": re.compile(
         r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}"
         r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b"

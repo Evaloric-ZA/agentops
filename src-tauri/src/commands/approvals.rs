@@ -117,13 +117,19 @@ pub fn decide(
         .transpose()?;
 
     let tx = db.conn().unchecked_transaction()?;
-    let current: Option<String> = tx
-        .query_row(
-            "SELECT state FROM approvals WHERE id = ?1",
-            params![approval_id],
-            |row| row.get(0),
-        )
-        .ok();
+    let current: Option<String> = match tx.query_row(
+        "SELECT state FROM approvals WHERE id = ?1",
+        params![approval_id],
+        |row| row.get(0),
+    ) {
+        Ok(state) => Some(state),
+        // Only a missing row is "not found". A genuine database fault
+        // must not be reported as a missing approval: that would send the
+        // operator looking in the wrong place for a problem that is not
+        // there.
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(error) => return Err(error.into()),
+    };
     match current {
         None => {
             return Err(AppError::NotFound("approval"));

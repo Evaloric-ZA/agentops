@@ -623,7 +623,7 @@ pub fn seed(conn: &Connection, anchor: &str) -> AppResult<()> {
     )?;
     tx.execute(
         "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('seeded_at', ?1)",
-        params![now_rfc3339()],
+        params![anchor],
     )?;
     tx.execute(
         "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('shift_length_minutes', ?1)",

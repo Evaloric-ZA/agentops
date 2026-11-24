@@ -47,7 +47,7 @@ agentops/
 │   └── src/
 │       ├── main.rs             a thin binary
 │       ├── lib.rs              the application builder
-│       ├── commands_api.rs     the 24 Tauri commands
+│       ├── commands_api.rs     the 23 Tauri commands
 │       ├── commands/           the command implementations
 │       ├── db/                 the connection, migrations and records
 │       ├── domain/             the canonical types

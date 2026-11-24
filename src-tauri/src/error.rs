@@ -58,7 +58,7 @@ pub fn validate_id(kind: &str, value: &str) -> AppResult<String> {
     if trimmed.is_empty() {
         return Err(AppError::InvalidInput(format!("{kind} must not be empty")));
     }
-    if trimmed.len() > 128 {
+    if trimmed.chars().count() > 128 {
         return Err(AppError::InvalidInput(format!(
             "{kind} must be at most 128 characters"
         )));

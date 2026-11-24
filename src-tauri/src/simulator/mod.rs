@@ -154,8 +154,18 @@ pub fn tick(conn: &Connection) -> AppResult<(SimulatorState, TickOutcome)> {
         return Ok((current, TickOutcome::Idle));
     }
     let step = current.step + 1;
-    let outcome = apply_step(conn, step)?;
-    set_setting(conn, "simulator_step", &step.to_string())?;
+    // The step and everything it writes are one unit. If any part of the
+    // step fails, nothing is committed and the step is not consumed, so
+    // the next tick tries the same step again from the same state.
+    //
+    // Without this, a failure part way through a step committed what had
+    // already been written — a run and its stages, say — while the step
+    // counter stayed where it was. Every retry then hit the same fault
+    // and the simulator was wedged for good.
+    let tx = conn.unchecked_transaction()?;
+    let outcome = apply_step(&tx, step)?;
+    set_setting(&tx, "simulator_step", &step.to_string())?;
+    tx.commit()?;
     Ok((state(conn)?, outcome))
 }
 

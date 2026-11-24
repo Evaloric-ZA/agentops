@@ -4,7 +4,7 @@ use rusqlite::params;
 
 use crate::db::Database;
 use crate::domain::Policy;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
 /// List every policy.
 pub fn list(db: &Database) -> AppResult<Vec<Policy>> {
@@ -31,10 +31,15 @@ pub fn list(db: &Database) -> AppResult<Vec<Policy>> {
 /// Enable or disable a policy.
 pub fn set_enabled(db: &Database, policy_id: &str, enabled: bool) -> AppResult<()> {
     let policy_id = crate::error::validate_id("policy id", policy_id)?;
-    db.conn().execute(
+    let changed = db.conn().execute(
         "UPDATE policies SET enabled = ?2 WHERE id = ?1",
         params![policy_id, i64::from(enabled)],
     )?;
+    if changed == 0 {
+        // Nothing matched, so there is no such policy. Reporting success
+        // would show a successful toggle for a policy that is not there.
+        return Err(AppError::NotFound("policy"));
+    }
     Ok(())
 }
 
