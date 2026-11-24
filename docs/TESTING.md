@@ -125,13 +125,18 @@ never counted as a pass.
 | the native build | The application compiles and links as an application |
 | the production dependency audit | The shipped dependencies have no advisory |
 | the development dependency audit | Reported, with the advisories listed in `docs/SECURITY.md` |
-| the Rust dependency audit | Reported as a skip when `cargo-audit` is not installed |
+| the Rust dependency audit | The Rust tree has no vulnerability, and no unmaintained, unsound or yanked crate that is not accepted in `scripts/rust_audit_allowlist.json` |
 | the privacy verifier | The required paths exist and nothing is embedded |
 
-During the v0.1.2 acceptance run the sweep reported **fourteen passed,
-zero failed and one skipped**. The skip was the Rust dependency audit: the
-tool that performs it is not installed here, and it was not installed
-without the operator's agreement.
+During the v0.1.2 acceptance run the sweep reported **fifteen passed,
+zero failed and zero skipped**.
+
+The Rust dependency audit denies warnings, so it fails on an unmaintained
+or an unsound crate as well as on a vulnerability. Three advisories are
+accepted and listed in `scripts/rust_audit_allowlist.json`, each with
+its reason and the action that would close it; they are described in
+`docs/SECURITY.md`. When `cargo-audit` is not installed the stage is
+reported as a skip with that reason, never as a pass.
 
 ## The privacy check
 

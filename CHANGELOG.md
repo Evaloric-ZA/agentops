@@ -57,9 +57,20 @@ The development and continuous integration baseline is Node.js 24. Node.js
 - **A dependency audit as part of the sweep.** The shipped dependencies
   are the gate; the advisories in the development toolchain are reported
   and listed in `docs/SECURITY.md`.
+- **The Rust dependency audit is a gate.** It denies warnings as well as
+  vulnerabilities, so an unmaintained, an unsound or a yanked crate fails
+  the sweep too. The advisories that have been accepted are listed in
+  `scripts/rust_audit_allowlist.json`, each with its reason and the
+  action that would close it; anything not listed fails.
 
 ### Fixed
 
+- **The bundled SQLite carried a known vulnerability.** The Rust
+  dependency audit found `RUSTSEC-2026-0459`, `CVE-2026-119375`, medium
+  severity, in the SQLite C library that `rusqlite` compiles into the
+  binary. `rusqlite` moved from 0.32 to 0.43 and `libsqlite3-sys` from
+  0.30.1 to 0.40.0, which is past the 0.39.0 that carries the fix. The
+  application's own use of the library did not change.
 - **A policy update that failed said nothing.** The error was swallowed,
   so a policy that was not there left the operator looking at a switch
   that had not moved, with no explanation. The failure is now shown.
@@ -81,6 +92,9 @@ The development and continuous integration baseline is Node.js 24. Node.js
 - **The native build check is stated precisely.** It proves the
   application compiles and links. It does not prove that a bundle, an
   installer, a signature or a notarisation exists.
+- **`rusqlite` moved from 0.32 to 0.43**, to pick up the fix for the
+  SQLite vulnerability above. It needs Rust 1.89, which is below the
+  declared minimum of 1.90.
 
 ## [0.1.1] - 2026-11-24
 

@@ -84,17 +84,52 @@ The frontend loads nothing from the network: the CSP restricts it to
 Direct dependencies are pinned through the lockfiles: `package-lock.json`
 for the frontend and `Cargo.lock` for the Rust side.
 
-The sweep runs two dependency audits.
+The sweep runs three dependency audits.
 
 - **The production dependencies are the gate.** `npm audit --omit=dev`
   fails the sweep if the shipped dependency tree has an advisory.
 - **The development toolchain is reported, not gated.** Its advisories are
   printed on every run and listed here.
+- **The Rust dependencies are the gate.** `cargo audit --deny warnings`
+  fails the sweep on any vulnerability, and also on an unmaintained, an
+  unsound or a yanked crate. The advisories that have been accepted are
+  listed in `scripts/rust_audit_allowlist.json`, each with the reason
+  and the action that would close it; they are passed to the tool as
+  exclusions. Anything not listed fails the sweep.
 
-`cargo audit` is the tool that would report the Rust advisories. It is
-not part of the Rust toolchain and is not installed without the
-operator's agreement, so the sweep reports it as a skip with that reason.
-It is never reported as a pass.
+`cargo audit` is not part of the Rust toolchain. When it is not
+installed, the sweep reports the stage as a skip with that reason. It is
+never reported as a pass.
+
+### The vulnerability that was found and fixed
+
+`RUSTSEC-2026-0459` — the bundled SQLite C library, through
+`rusqlite` — carried `CVE-2026-119375`, medium severity, 6.8. The
+application compiles SQLite into its binary, so the defect shipped with
+it. `rusqlite` moved from 0.32 to 0.43 and `libsqlite3-sys` from 0.30.1
+to 0.40.0, which is past the 0.39.0 that carries the fix. The
+application's own use of the library did not change: the same calls
+compile, all forty-nine Rust tests pass, and the upgrade needs Rust 1.89,
+which is below the declared minimum of 1.90.
+
+### The Rust advisories that are accepted
+
+These three are warnings, not vulnerabilities. None of them can be closed
+by an upgrade that is compatible with this release, so each is listed in
+`scripts/rust_audit_allowlist.json` with its reason and its action.
+
+| Advisory | Package | Path | Kind | Exercised here |
+|---|---|---|---|---|
+| RUSTSEC-2026-0543 | chrono | agentops → chrono | unmaintained | Only on the application's own timestamps |
+| RUSTSEC-2024-0429 | glib | agentops → tauri → gtk → glib (Linux only) | unsound | No: not in the macOS or Windows build, and the affected functions are never called |
+| RUSTSEC-2024-0370 | proc-macro-error | agentops → tauri → gtk → glib → glib-macros → proc-macro-error (Linux only) | unmaintained | No: a build-time dependency of the Linux GTK bindings |
+
+`chrono` has no patched release, so the action is to replace it with
+`time` or `jiff` in a future release, which is a deliberate change with
+its own risk and does not belong in a maintenance release. The other two
+are inside the GTK stack that the Tauri Linux backend pulls in; the fix
+for the unsound one needs glib 0.20, which exists only in a prerelease of
+the next major Tauri version.
 
 ### The advisories in the development toolchain
 

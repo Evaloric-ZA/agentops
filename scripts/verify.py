@@ -22,6 +22,7 @@ nothing outside the repository and deletes nothing.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -130,6 +131,57 @@ def the_registry_is_reachable(root: Path) -> bool:
     except (FileNotFoundError, PermissionError):
         return False
     return code == 0
+
+
+def run_the_rust_audit(sweep: "Sweep", root: Path) -> None:
+    """Audit the Rust dependencies.
+
+    The gate denies warnings, so an unmaintained, an unsound or a yanked
+    crate fails the sweep. The advisories that have been accepted are
+    listed in scripts/rust_audit_allowlist.json, each with the reason
+    and what would close it; they are passed to the tool as exclusions.
+    Anything not listed fails.
+    """
+    allowlist = root / "scripts" / "rust_audit_allowlist.json"
+    accepted = []
+    if allowlist.exists():
+        try:
+            data = json.loads(allowlist.read_text(encoding="utf-8"))
+            accepted = [entry["id"] for entry in data.get("advisories", [])]
+        except (ValueError, KeyError, TypeError) as error:
+            sweep.fail(
+                "the Rust dependency audit",
+                f"the allowlist could not be read: {error}",
+            )
+            return
+
+    # The advisory database is fetched once. If it cannot be fetched the
+    # check is skipped with the reason, not failed: an unreachable
+    # network says nothing about the dependencies.
+    database = Path.home() / ".cargo" / "advisory-db"
+    if not database.exists():
+        fetched = subprocess.call(
+            ["cargo", "audit", "update-db"],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if fetched != 0:
+            sweep.skip(
+                "the Rust dependency audit",
+                "the advisory database could not be fetched from here",
+            )
+            return
+
+    command = [
+        "cargo", "audit",
+        "--file", "src-tauri/Cargo.lock",
+        "--no-fetch",
+        "--deny", "warnings",
+    ]
+    for advisory in accepted:
+        command += ["--ignore", advisory]
+    sweep.run("the Rust dependency audit", command, "cargo is not installed")
 
 
 def main() -> int:
@@ -256,11 +308,7 @@ def main() -> int:
         )
 
     if shutil.which("cargo-audit"):
-        sweep.run(
-            "the Rust dependency audit",
-            ["cargo", "audit"],
-            "cargo is not installed",
-        )
+        run_the_rust_audit(sweep, root)
     else:
         sweep.skip(
             "the Rust dependency audit",

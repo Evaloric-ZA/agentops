@@ -811,15 +811,47 @@ Measured during the v0.1.2 acceptance run, on Node.js 24.22.3 with npm
 |---|---|---|---|
 | Rust tests | 33 | 46 | 49 |
 | Frontend tests | 36 | 42 | 60 |
-| Sweep stages | 8 | 13 | 14 |
+| Sweep stages | 8 | 13 | 15 |
 | Scanner regression cases | 20 | 28 | 50 |
 | Screens | 12 | 12 | 12 |
 | Typed commands | 23 | 23 | 23 |
 
-The sweep reports fourteen passed, zero failed and one skipped. The
-skip is the Rust dependency audit: the tool that performs it is not
-installed here, and it was not installed without the operator's
-agreement.
+The sweep reports fifteen passed, zero failed and zero skipped.
+
+### The Rust dependency audit, and what it found
+
+`cargo audit` was installed on this host, so the stage that used to be a
+skip is now a gate. It denies warnings, not only vulnerabilities: an
+unmaintained, an unsound or a yanked crate fails the sweep too.
+
+It found one vulnerability. `RUSTSEC-2026-0459` — the bundled SQLite C
+library, through `rusqlite` — carried `CVE-2026-119375`, medium
+severity, 6.8. The application compiles SQLite into its binary, so the
+defect would have shipped with it. `rusqlite` moved from 0.32 to 0.43
+and `libsqlite3-sys` from 0.30.1 to 0.40.0, which is past the 0.39.0
+that carries the fix. The application's own use of the library did not
+change: the same calls compile, all forty-nine Rust tests pass, the
+clippy gate is clean, and the upgrade needs Rust 1.89, which is below
+the declared minimum of 1.90.
+
+Three warnings remain, and none of them can be closed by a compatible
+upgrade:
+
+| Advisory | Package | Path | Kind | Exercised here |
+|---|---|---|---|---|
+| RUSTSEC-2026-0543 | chrono | agentops → chrono | unmaintained | Only on the application's own timestamps |
+| RUSTSEC-2024-0429 | glib | agentops → tauri → gtk → glib (Linux only) | unsound | No: not in the macOS or Windows build |
+| RUSTSEC-2024-0370 | proc-macro-error | agentops → tauri → gtk → glib → glib-macros → proc-macro-error (Linux only) | unmaintained | No: a build-time dependency of the Linux GTK bindings |
+
+Each is listed in `scripts/rust_audit_allowlist.json` with its reason
+and the action that would close it. The audit still fails on anything
+that is not listed there, and the gate was proved by putting the
+vulnerable binding back: it reported the vulnerability and failed.
+
+`cargo-audit` 0.23 does not read an `audit.toml` configuration file, so
+the list is a file the sweep reads and passes to the tool as
+exclusions. The `audit.toml` that was tried first was removed rather
+than left in place doing nothing.
 
 ## Known limitations
 
@@ -831,10 +863,11 @@ These are genuinely outside v0.1 and are recorded rather than hidden.
   its window. The functional checks that need a window are listed in
   `docs/TESTING.md` as a manual smoke checklist.
 - **No DMG on this host**, for the Finder reason recorded above.
-- **`cargo audit` is not installed here.** The dependency-audit tool that
-  is available (`npm audit`) was run; the unavailable one is recorded as a
-  limitation rather than skipped silently. The sweep reports it as a
-  skip, with the reason.
+- **Three Rust advisories are accepted rather than closed.** They are
+  warnings, not vulnerabilities, and none can be closed by an upgrade
+  that is compatible with this release. They are listed in
+  `scripts/rust_audit_allowlist.json` with their reason and their
+  action, and the audit still denies them if they are not listed there.
 - **The visual design has not been reviewed in a running window.** The
   layout, the focus states and the responsive behaviour are implemented and
   type-checked, but this host has no interactive display to look at them.
@@ -874,7 +907,7 @@ test summaries in the logs, never from the badge alone.
 |---|---|---|
 | Rust tests | 46 | 49 |
 | Frontend tests | 42 | 60 |
-| Sweep stages | 13 | 14 |
+| Sweep stages | 13 | 15 |
 | Scanner regression cases | 28 | 50 |
 | Screens | 12 | 12 |
 | Typed commands | 23 | 23 |

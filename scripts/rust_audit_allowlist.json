@@ -1,0 +1,38 @@
+{
+  "note": "The Rust advisories that are accepted. The gate runs `cargo audit --deny warnings`, so an unmaintained, an unsound or a yanked crate fails the sweep unless it is listed here. A listed advisory is a decision to revisit, not a permanent exemption. cargo-audit 0.23 does not read an audit.toml, so the list is here and the sweep passes each identifier to it.",
+  "advisories": [
+    {
+      "id": "RUSTSEC-2026-0543",
+      "package": "chrono",
+      "kind": "unmaintained",
+      "severity": "none: the crate is not vulnerable, it is no longer maintained",
+      "path": "agentops -> chrono",
+      "why": "chrono is used to format and parse RFC 3339 timestamps the application generates itself. There is no patched release to move to.",
+      "exercised": "Yes, but only on the application's own timestamps. The crate is not exposed to untrusted input in a way that would turn a defect in it into a defect here.",
+      "action": "Replace chrono with time or jiff in a future release, which is a deliberate change with its own risk, so it is not done inside a maintenance release.",
+      "reviewed": "2026-11-24"
+    },
+    {
+      "id": "RUSTSEC-2024-0429",
+      "package": "glib",
+      "kind": "unsound",
+      "severity": "medium",
+      "path": "agentops -> tauri -> gtk -> glib (Linux only)",
+      "why": "The affected iterator implementations are in a GTK binding that the Tauri Linux backend pulls in. The application's own code never calls them.",
+      "exercised": "No. The crate is not in the macOS or Windows build at all, and the affected functions are not called on any platform.",
+      "action": "Move to a Tauri release built on glib 0.20 or later. That exists only in a prerelease of the next major version, which is not something a maintenance release should take.",
+      "reviewed": "2026-11-24"
+    },
+    {
+      "id": "RUSTSEC-2024-0370",
+      "package": "proc-macro-error",
+      "kind": "unmaintained",
+      "severity": "none: the crate is not vulnerable, it is no longer maintained",
+      "path": "agentops -> tauri -> gtk -> glib -> glib-macros -> proc-macro-error (Linux only)",
+      "why": "It is a build-time dependency of the GTK bindings. It never reaches the shipped binary's runtime.",
+      "exercised": "No. It is not in the macOS or Windows build at all.",
+      "action": "It disappears with the same GTK upgrade as RUSTSEC-2024-0429.",
+      "reviewed": "2026-11-24"
+    }
+  ]
+}
