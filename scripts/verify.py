@@ -76,11 +76,27 @@ class Sweep:
         print(f"NOTE: {label} ({reason})", flush=True)
 
 
-def the_registry_is_reachable(root: Path) -> bool:
+def the_program(name: str) -> list[str] | None:
+    """Find a program the way the platform finds one.
+
+    On Windows an npm install puts `npm.cmd` on the path, not `npm`.
+    Python starts a program without a shell, so it does not apply the
+    path extension rules the shell would, and a bare `npm` is not
+    found. `shutil.which` applies them.
+
+    This was not a theoretical problem: the first run on a Windows
+    runner reported every npm check as skipped because npm is not
+    installed, when npm was installed the whole time.
+    """
+    found = shutil.which(name)
+    return [found] if found else None
+
+
+def the_registry_is_reachable(root: Path, npm: list[str]) -> bool:
     """Whether the package registry can be reached at all."""
     try:
         code = subprocess.call(
-            ["npm", "ping", "--registry", "https://registry.npmjs.org/"],
+            npm + ["ping", "--registry", "https://registry.npmjs.org/"],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -154,27 +170,34 @@ def main() -> int:
     python = sys.executable
     sweep = Sweep(root)
 
+    # The programs are resolved once. On Windows `npm` is `npm.cmd`, and
+    # Python starts a program without a shell, so a bare `npm` is not
+    # found. The fallback keeps the old behaviour: a missing program
+    # raises, and the sweep reports it as a skip with the reason.
+    npm = the_program("npm") or ["npm"]
+    cargo = the_program("cargo") or ["cargo"]
+
     # The clean install first: every later check reads the tree it left.
-    sweep.run("npm ci", ["npm", "ci", "--no-audit", "--no-fund"], "npm is not installed")
+    sweep.run("npm ci", npm + ["ci", "--no-audit", "--no-fund"], "npm is not installed")
     if not ensure_cargo_tauri(root):
         sweep.skip(
             "the native build",
             "the Tauri command line is not installed, so the application cannot be compiled",
         )
 
-    sweep.run("npm run check", ["npm", "run", "check"], "npm is not installed")
-    sweep.run("npm test", ["npm", "test", "--", "--run"], "npm is not installed")
-    sweep.run("npm run build", ["npm", "run", "build"], "npm is not installed")
+    sweep.run("npm run check", npm + ["run", "check"], "npm is not installed")
+    sweep.run("npm test", npm + ["test", "--", "--run"], "npm is not installed")
+    sweep.run("npm run build", npm + ["run", "build"], "npm is not installed")
 
     sweep.run(
         "cargo fmt --check",
-        ["cargo", "fmt", "--manifest-path", "src-tauri/Cargo.toml", "--all", "--", "--check"],
+        cargo + ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--all", "--", "--check"],
         "cargo is not installed",
     )
     sweep.run(
         "cargo clippy",
-        [
-            "cargo", "clippy",
+        cargo + [
+            "clippy",
             "--manifest-path", "src-tauri/Cargo.toml",
             "--all-targets", "--all-features",
             "--", "-D", "warnings",
@@ -183,7 +206,7 @@ def main() -> int:
     )
     sweep.run(
         "cargo test",
-        ["cargo", "test", "--manifest-path", "src-tauri/Cargo.toml", "--all-features"],
+        cargo + ["test", "--manifest-path", "src-tauri/Cargo.toml", "--all-features"],
         "cargo is not installed",
     )
 
@@ -224,20 +247,25 @@ def main() -> int:
     # macOS and downloads tooling on Linux. The .app and the installers
     # are produced by a separate, documented step; see docs/PACKAGING.md.
     if ensure_cargo_tauri(root):
+        # `npm run tauri -- ...` rather than `cargo tauri ...`. Cargo
+        # looks for an external subcommand as a binary, and on Windows
+        # it did not find the `.cmd` bridge: the first run on a Windows
+        # runner failed with "no such command: `tauri`". npm resolves
+        # the local command line interface itself, on every platform.
         sweep.run(
             "the native build",
-            ["cargo", "tauri", "build", "--debug", "--no-bundle"],
-            "cargo is not installed",
+            npm + ["run", "tauri", "--", "build", "--debug", "--no-bundle"],
+            "npm is not installed",
         )
 
     # The dependency advisories. The npm registry has to be reachable for
     # the JavaScript audit; the Rust audit needs a tool that is not part
     # of the toolchain and is not installed without the operator's
     # agreement, so it is reported as skipped rather than as passed.
-    if the_registry_is_reachable(root):
+    if the_registry_is_reachable(root, npm):
         sweep.run(
             "the production dependency audit",
-            ["npm", "audit", "--omit=dev", "--audit-level=moderate"],
+            npm + ["audit", "--omit=dev", "--audit-level=moderate"],
             "npm is not installed",
         )
         # The development toolchain has advisories of its own. They do
@@ -245,7 +273,7 @@ def main() -> int:
         # exercise them, so they are reported here and listed in
         # docs/SECURITY.md rather than allowed to fail the sweep.
         print("\n=== the development dependency audit ===", flush=True)
-        code = subprocess.call(["npm", "audit"], cwd=root)
+        code = subprocess.call(npm + ["audit"], cwd=root)
         if code == 0:
             sweep.note("the development dependency audit", "no advisories were found")
         else:

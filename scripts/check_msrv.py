@@ -51,13 +51,17 @@ def dependency_minimums(root: Path) -> dict[str, str]:
     result = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--all-features", "--manifest-path", str(manifest)],
         capture_output=True,
-        text=True,
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"cargo metadata failed: {result.stderr.strip()[:300]}")
+        detail = result.stderr.decode("utf-8", errors="replace").strip()[:300]
+        raise RuntimeError(f"cargo metadata failed: {detail}")
 
-    data = json.loads(result.stdout)
+    # The output is decoded as UTF-8 rather than with the platform's
+    # encoding. On Windows the platform's encoding is a code page that
+    # is not UTF-8, and the metadata contains characters it cannot
+    # represent: the check failed there with a decoding error.
+    data = json.loads(result.stdout.decode("utf-8"))
     minimums: dict[str, str] = {}
     for package in data.get("packages", []):
         rust_version = package.get("rust_version")
