@@ -12,7 +12,7 @@ any release.
 
 Nothing yet.
 
-## [0.1.1] - 2026-11-23
+## [0.1.1] - 2026-11-24
 
 A maintenance release. No feature is added, no screen changes, and the
 data model is unchanged: a v0.1 database opens as a v0.1.1 database.
