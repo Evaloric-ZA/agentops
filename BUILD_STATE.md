@@ -792,6 +792,48 @@ approvals, the policy toggle is confirmed, the simulator starts and
 pauses, the settings form and the demo data panel are there, and the
 approval decision reaches the audit log.
 
+### Making the Windows build a real gate
+
+The sweep proved that the application compiles and links on Windows. It
+did not prove that the Windows *application* — the `.msi` and the NSIS
+installer — can be produced, because the sweep deliberately does not
+bundle. The continuous integration had no job that did the bundling
+either, so nothing in the build ever touched the WebView2 loader, the
+`.ico`, WiX or NSIS.
+
+- **A `windows-app` job** now runs the Tauri bundler on
+  `windows-latest` and fails if no installer comes out. It is its own
+  job rather than another step in the matrix, so a bundling failure is
+  visible on its own.
+- **The bridge that makes `cargo tauri ...` work is now its own script**,
+  `scripts/ensure_cargo_tauri.py`. The sweep and the new job call it, so
+  there is one implementation of it rather than two.
+- **The line endings are pinned.** `.gitattributes` says every text file
+  is checked out with line feeds on every platform, which is what keeps
+  `scripts/verify.sh`'s shebang working on a Windows checkout.
+
+### What was checked here, and what was not
+
+The application was checked against a Windows target on this host, which
+is not Windows:
+
+| Check | Result |
+|---|---|
+| `cargo check --target x86_64-pc-windows-gnu --all-targets` | passes — the whole tree, including the bundled SQLite C code, `webview2-com`, `muda` and `tao` |
+| `cargo check --target x86_64-pc-windows-msvc --all-targets` | passes — the target the continuous integration uses, including the Windows resource embedding that carries the icon and the version into the binary |
+
+The MSVC check needed `llvm-rc` for the resource compiler, which is in
+the keg-only `llvm@22` Homebrew formula and is therefore not on the path
+by default. The bundled SQLite is the one part of the MSVC target that
+cannot be checked here, because it needs Microsoft's own C compiler; the
+check was made with that feature off, and the manifest and the lockfile
+were restored exactly afterwards.
+
+What this proves: the code compiles for Windows. What it does not prove:
+that the installer is produced, and that the application runs. Those are
+the continuous integration's to report, and until that job has run,
+Windows is unverified.
+
 ### The verification system
 
 The checks now live in `scripts/verify.py`, so `scripts/verify.sh` for

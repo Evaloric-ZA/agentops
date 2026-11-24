@@ -47,6 +47,17 @@ The development and continuous integration baseline is Node.js 24. Node.js
   contract.
 - **Windows in the continuous integration matrix.** The sweep now runs
   on Linux, macOS and Windows.
+- **A continuous integration job that builds the Windows application.**
+  The sweep compiles and links the application on Windows but does not
+  bundle it, so nothing in the build touched the WebView2 loader, the
+  Windows icon, WiX or NSIS. The `windows-app` job runs the Tauri
+  bundler and fails if no `.msi` or NSIS installer comes out.
+- **One implementation of the `cargo tauri` bridge.** It is now
+  `scripts/ensure_cargo_tauri.py`, called by both the sweep and the
+  Windows job.
+- **The line endings are pinned.** `.gitattributes` checks every text
+  file out with line feeds on every platform, which is what keeps the
+  shell entry point's shebang working on a Windows checkout.
 - **One list of checks for every platform.** The checks live in
   `scripts/verify.py`, so `scripts/verify.sh` for macOS and Linux and
   `scripts/verify.ps1` for Windows run the same checks in the same order

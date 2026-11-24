@@ -29,6 +29,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The bridge that makes `cargo tauri ...` work lives in its own file,
+# because the continuous integration job that builds the Windows
+# application needs it too.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ensure_cargo_tauri import ensure_cargo_tauri  # noqa: E402
+
 
 class Sweep:
     """Runs the checks and keeps the tally."""
@@ -68,55 +74,6 @@ class Sweep:
     def note(self, label: str, reason: str) -> None:
         """A result that is reported but does not decide the sweep."""
         print(f"NOTE: {label} ({reason})", flush=True)
-
-
-def ensure_cargo_tauri(root: Path) -> bool:
-    """Make `cargo tauri ...` work.
-
-    Cargo looks for a subcommand named `cargo-tauri`, but the npm
-    `@tauri-apps/cli` package installs one named `tauri`. A small bridge
-    connects the two. The bridge has to be created after `npm ci` has
-    run, because `npm ci` replaces the whole of `node_modules` and would
-    take the bridge with it.
-    """
-    bin_dir = root / "node_modules" / ".bin"
-    entry = root / "node_modules" / "@tauri-apps" / "cli" / "tauri.js"
-    if not entry.exists():
-        return False
-
-    # Cargo passes the name of the subcommand to an external subcommand,
-    # so the first argument the bridge receives is "tauri". The command
-    # line interface wants the subcommand itself, not that name, so the
-    # name is dropped.
-    if os.name == "nt":
-        bridge = bin_dir / "cargo-tauri.cmd"
-        if not bridge.exists():
-            bridge.write_text(
-                "@echo off\r\n"
-                "setlocal enabledelayedexpansion\r\n"
-                'if /I "%~1"=="tauri" shift\r\n'
-                'set "args="\r\n'
-                ":collect\r\n"
-                'if "%~1"=="" goto run\r\n'
-                'set "args=!args! %1"\r\n'
-                "shift\r\n"
-                "goto collect\r\n"
-                ":run\r\n"
-                'node "%~dp0\\..\\@tauri-apps\\cli\\tauri.js"!args!\r\n',
-                encoding="utf-8",
-            )
-    else:
-        bridge = bin_dir / "cargo-tauri"
-        if not bridge.exists():
-            bridge.write_text(
-                "#!/bin/sh\n"
-                'DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
-                'if [ "$1" = "tauri" ]; then shift; fi\n'
-                'exec node "$DIR/../@tauri-apps/cli/tauri.js" "$@"\n',
-                encoding="utf-8",
-            )
-            bridge.chmod(0o755)
-    return True
 
 
 def the_registry_is_reachable(root: Path) -> bool:

@@ -68,6 +68,7 @@ REQUIRED = [
     "scripts/verify.sh",
     "scripts/verify.ps1",
     "scripts/verify.py",
+    "scripts/ensure_cargo_tauri.py",
     "scripts/rust_audit_allowlist.json",
     "scripts/verify_repo.py",
     "scripts/check_version.py",

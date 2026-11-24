@@ -1,0 +1,14 @@
+# The line endings are the same on every platform, so a file checked out
+# on Windows is the same file that was checked out on Linux or macOS.
+#
+# This matters for one file in particular: `scripts/verify.sh` starts
+# with a shebang, and a carriage return before the newline stops the
+# kernel from recognising it. Rust, Python and Node read either ending,
+# but the shell does not.
+* text=auto eol=lf
+
+# The icons are binary. Saying so stops Git from trying to normalise
+# their line endings, which would corrupt them.
+*.ico binary
+*.icns binary
+*.png binary

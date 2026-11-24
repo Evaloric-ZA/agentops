@@ -20,6 +20,7 @@ agentops/
 ├── package.json
 ├── package-lock.json
 ├── .node-version                the Node.js baseline: 24
+├── .gitattributes               the line endings are the same on every platform
 ├── svelte.config.js
 ├── tsconfig.json
 ├── tsconfig.node.json
@@ -64,6 +65,7 @@ agentops/
     ├── verify.py                the sweep: the checks themselves, one line each
     ├── verify.sh                the sweep entry point for macOS and Linux
     ├── verify.ps1               the sweep entry point for Windows
+    ├── ensure_cargo_tauri.py    the bridge that makes `cargo tauri ...` work
     ├── verify_repo.py           the structure and privacy scan
     ├── test_verify_repo.py      the privacy scan's own regression test
     ├── check_version.py         the manifests must agree on the version
