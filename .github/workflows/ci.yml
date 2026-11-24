@@ -107,8 +107,7 @@ jobs:
       - name: the Windows installers
         shell: pwsh
         run: |
-          $env:PATH = "$PWD\node_modules\.bin;$env:PATH"
-          cargo tauri build --debug
+          npm run tauri -- build --debug
 
       # The installers are the deliverable, so they are named rather
       # than left in the log to be found.

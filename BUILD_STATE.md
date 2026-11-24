@@ -834,6 +834,24 @@ that the installer is produced, and that the application runs. Those are
 the continuous integration's to report, and until that job has run,
 Windows is unverified.
 
+### What the first run on a Windows runner found
+
+The first run of the Windows jobs found three real defects, all of them
+in the build rather than in the application. None of them could have been
+found without a Windows runner.
+
+| What | How it showed up | Cause | Fix |
+|---|---|---|---|
+| every npm check was skipped | `SKIP: npm ci (npm is not installed)` — on a runner where npm was installed | Python starts a program without a shell, so it does not apply the path extension rules. On Windows npm is `npm.cmd`, and a bare `npm` is not found | the programs are resolved with `shutil.which`, which applies those rules |
+| the minimum Rust check failed | `UnicodeDecodeError: 'charmap' codec can't decode byte 0x81` | the `cargo metadata` output was decoded with the platform's encoding, which is a code page that is not UTF-8 on Windows | the output is captured as bytes and decoded as UTF-8 |
+| the installer job failed | `error: no such command: 'tauri'` | Cargo looks for an external subcommand as a program and did not find the `.cmd` bridge | the sweep and the job use `npm run tauri -- ...`, which resolves the command line interface itself on every platform |
+
+The first of them is the dangerous kind: a check that reports itself as
+skipped is invisible, and four checks and the native build were quietly
+not running at all. The sweep was right to report them as skips rather
+than as passes — that is what made the difference between a green job and
+a job that had done nothing visible.
+
 ### The verification system
 
 The checks now live in `scripts/verify.py`, so `scripts/verify.sh` for

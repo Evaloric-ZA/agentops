@@ -76,6 +76,17 @@ The development and continuous integration baseline is Node.js 24. Node.js
 
 ### Fixed
 
+- **The build did not work on Windows.** The first run of the Windows
+  jobs found three defects. Python starts a program without a shell, so
+  on Windows it did not find `npm.cmd` and every npm check was skipped
+  as though npm were not installed; the programs are now resolved with
+  `shutil.which`, which applies the platform's own rules. The output of
+  `cargo metadata` was decoded with the platform's encoding, which is not
+  UTF-8 on Windows, and the minimum Rust check failed with a decoding
+  error; it is now decoded as UTF-8. And Cargo did not find the `.cmd`
+  bridge for `cargo tauri`, so the installer job failed with `no such
+  command: tauri`; the sweep and the job now use `npm run tauri -- ...`,
+  which resolves the command line interface on every platform.
 - **The bundled SQLite carried a known vulnerability.** The Rust
   dependency audit found `RUSTSEC-2026-0459`, `CVE-2026-119375`, medium
   severity, in the SQLite C library that `rusqlite` compiles into the

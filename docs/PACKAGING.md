@@ -23,25 +23,38 @@ explicitly, so a file checked out on Windows is the same file that was
 checked out on Linux — which matters for `scripts/verify.sh`, whose
 shebang a stray carriage return would break.
 
-### The `cargo tauri` command
+### The Tauri command
 
-`cargo tauri build` invokes a binary named `cargo-tauri`, but the npm
-`@tauri-apps/cli` package installs one named `tauri`. A small bridge at
-`node_modules/.bin/cargo-tauri` connects the two, so the documented
-command works verbatim:
+**Use `npm run tauri -- ...`.** It works the same on every platform,
+because npm resolves the command line interface that the project already
+depends on:
+
+```bash
+npm run tauri -- build --debug
+```
+
+```powershell
+npm run tauri -- build --debug
+```
+
+The `--` matters: without it npm takes the arguments for itself.
+
+**`cargo tauri ...` is a convenience on macOS and Linux.** Cargo invokes
+a binary named `cargo-tauri`, but the npm `@tauri-apps/cli` package
+installs one named `tauri`. A small bridge at
+`node_modules/.bin/cargo-tauri` connects the two, so this works
+verbatim:
 
 ```bash
 export PATH="$PWD/node_modules/.bin:$PATH"
 cargo tauri build --debug
 ```
 
-On Windows the bridge is `node_modules\.bin\cargo-tauri.cmd` and the
-path is added the same way:
-
-```powershell
-$env:PATH = "$PWD\node_modules\.bin;$env:PATH"
-cargo tauri build --debug
-```
+**The bridge does not work on Windows.** Cargo looks for an external
+subcommand as a program, and on the Windows runner it did not find the
+`.cmd` bridge: the first run there failed with `no such command:
+tauri`. That is why the sweep and the continuous integration use the npm
+form, and why the bridge is only a convenience.
 
 The bridge is created by `scripts/ensure_cargo_tauri.py`. The sweep
 creates it after `npm ci` and again immediately before the native build,
