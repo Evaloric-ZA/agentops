@@ -8,7 +8,9 @@
 | macOS | Xcode Command Line Tools (`xcode-select --install`) and Rust |
 | Windows | Microsoft C++ Build Tools, the WebView2 runtime, and Rust |
 
-Rust is installed with `rustup`. The frontend toolchain is Node 20 or newer.
+Rust is installed with `rustup`. The frontend toolchain is **Node.js 24**;
+`.node-version` carries `24` and the package manifest declares the engine.
+Node.js 20 is no longer supported.
 
 ### The `cargo tauri` command
 
@@ -41,6 +43,23 @@ It is deliberately **not** the same as producing an installer. The
 `.app`, the `.dmg` and the Linux packages come from a separate
 `cargo tauri build` run, and on macOS the `.dmg` step needs an
 interactive Finder session.
+
+### Six different things, and what proves each
+
+It is easy to read "the build passed" as more than it is. These are
+separate, and each needs its own evidence.
+
+| | What it is | What proves it |
+|---|---|---|
+| A | the frontend production bundle | `npm run build` — `dist/` assembles |
+| B | the Rust code compiles and its tests pass | `cargo build` and `cargo test` |
+| C | the Tauri application compiles and links | `cargo tauri build --debug --no-bundle` — the sweep's native build |
+| D | a native bundle or installer is produced | `cargo tauri build` — the `.app`, the `.dmg`, the `.deb`, the `.msi` |
+| E | the bundle is signed | a signing identity and a signing step; v0.1 has none |
+| F | the bundle is notarised | a notarisation step with an online submission; v0.1 has none |
+
+**The sweep proves C.** It does not prove D, E or F, and a green sweep
+must never be reported as a signed, notarised installer.
 
 ## Development build
 

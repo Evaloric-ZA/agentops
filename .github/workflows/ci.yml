@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       # The actions are pinned to a commit, not to a tag, so a moved tag
       # cannot change what the build runs.
@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       # Pinned to a commit, so the `toolchain` input has to be given
@@ -52,9 +52,20 @@ jobs:
 
       # The whole sweep: the frontend checks, the Rust checks, the version
       # check, the scanner's own test, the native build and the privacy
-      # verifier. One PASS/FAIL line per check.
+      # verifier. One PASS/FAIL/SKIP line per check.
+      #
+      # The checks themselves live in scripts/verify.py, so the two
+      # entry points below run the same checks in the same order. The
+      # shell one is for macOS and Linux; the PowerShell one is for
+      # Windows, where there is no shell to run the other.
       - name: the sweep
+        if: runner.os != 'Windows'
         run: bash scripts/verify.sh
+
+      - name: the sweep (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/verify.ps1
 
   msrv:
     name: the minimum supported Rust
@@ -64,7 +75,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       # The version in src-tauri/Cargo.toml's rust-version field. If this
