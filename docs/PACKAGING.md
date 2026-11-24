@@ -133,8 +133,26 @@ which is keg-only, so it is not on the path by default.
 **Neither check is a substitute for the job.** A cross-compiled check
 proves the code compiles for Windows; it does not prove the installer is
 produced, and it does not prove the application runs. Those are the
-continuous integration's to report, and until that job has run, Windows
-is unverified.
+continuous integration's to report.
+
+**And the job has now run.** On the Windows runner the continuous
+integration produced both installers:
+
+| Artefact | Size |
+|---|---|
+| `AgentOps_0.1.2_x64_en-US.msi` | 4.77 MiB |
+| `AgentOps_0.1.2_x64-setup.exe` | 2.97 MiB |
+
+The WiX toolset and NSIS are downloaded and verified by the bundler, the
+icon is embedded in the executable, and the application itself is built
+with MSVC. The sweep on the same runner reports fourteen passed, zero
+failed and one skipped — the skip is the Rust dependency audit, because
+`cargo-audit` is not installed on the runner.
+
+What that establishes: the Windows application builds and can be
+installed. What it does not establish: that it was installed and run. A
+runner is a machine with no person and no display, and no test on it
+starts the application.
 
 ## Development build
 

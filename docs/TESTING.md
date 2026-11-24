@@ -87,7 +87,7 @@ python3 scripts/check_msrv.py .
 python3 scripts/test_verify_repo.py
 python3 scripts/check_types.py .
 python3 scripts/verify_repo.py .
-cargo tauri build --debug --no-bundle
+npm run tauri -- build --debug --no-bundle
 npm audit --omit=dev
 
 bash scripts/verify.sh          # macOS and Linux

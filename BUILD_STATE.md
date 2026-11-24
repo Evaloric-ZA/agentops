@@ -155,14 +155,15 @@ Every command from `references/acceptance-tests.md`, in order:
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` | **PASS** |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` | **PASS** — no warnings |
 | `cargo test --manifest-path src-tauri/Cargo.toml --all-features` | **PASS** — 33 tests |
-| `cargo tauri build --debug` | **PASS with `--bundles app`** — see the blocker below |
+| `npm run tauri -- build --debug` | **PASS with `--bundles app`** — see the blocker below |
 | `python scripts/verify_repo.py <repo-root>` | **PASS** — structure and privacy scan |
 
 `bash scripts/verify.sh` runs the whole sweep: **8 passed, 0 failed.**
 
 ### The native build and the one blocker
 
-`cargo tauri build --debug` compiles, links and bundles the application:
+`npm run tauri -- build --debug` compiles, links and bundles the
+application:
 
 ```
 Built application at: src-tauri/target/debug/agentops
@@ -362,7 +363,7 @@ It is part of the sweep. It caught the real drift during this release —
 the Tauri build, so a tree that could not be assembled as an application
 still passed the sweep.
 
-The sweep now runs `cargo tauri build --debug --no-bundle`, which
+The sweep now runs `npm run tauri -- build --debug --no-bundle`, which
 compiles and links the application without the platform bundler — the
 bundler needs an interactive session on macOS and downloads tooling on
 Linux.
@@ -831,8 +832,21 @@ were restored exactly afterwards.
 
 What this proves: the code compiles for Windows. What it does not prove:
 that the installer is produced, and that the application runs. Those are
-the continuous integration's to report, and until that job has run,
-Windows is unverified.
+the continuous integration's to report.
+
+**They have now been reported.** The continuous integration on the Windows
+runner produced both installers — `AgentOps_0.1.2_x64_en-US.msi`
+(4.77 MiB) and `AgentOps_0.1.2_x64-setup.exe` (2.97 MiB) — with the
+application built by MSVC, the icon embedded in the executable, and WiX
+and NSIS downloaded and verified by the bundler. The sweep on the same
+runner reports fourteen passed, zero failed and one skipped; the skip is
+the Rust dependency audit, because `cargo-audit` is not installed on the
+runner.
+
+So Windows now has: the code compiles for it, the application compiles
+and links there, and the installers are produced. It does not yet have:
+the application installed and run, which is a different thing and would
+need a runner with a display.
 
 ### What the first run on a Windows runner found
 
