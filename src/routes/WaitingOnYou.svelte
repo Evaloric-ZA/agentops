@@ -171,11 +171,14 @@
           {selected.comment ? ` “${selected.comment}”` : ""}
         </p>
       {/if}
-
-      {#if message}
-        <p class="message" class:danger={messageTone === "danger"} role="status">{message}</p>
-      {/if}
     </aside>
+  {/if}
+
+  <!-- The confirmation is outside the drawer on purpose. A decided
+       approval leaves the pending list, so the drawer closes and a
+       message inside it would never be read. -->
+  {#if message}
+    <p class="message" class:danger={messageTone === "danger"} role="status">{message}</p>
   {/if}
 </div>
 

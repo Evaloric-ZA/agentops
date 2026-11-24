@@ -16,9 +16,29 @@
     void policies.load();
   });
 
+  let message = $state<string | null>(null);
+  let messageTone = $state<"ok" | "danger">("ok");
+
+  /**
+   * Turn a policy on or off.
+   *
+   * The command can fail: a policy that is not there is refused, and the
+   * refusal is a structured error with its own code. A failure that is
+   * not shown leaves the operator looking at a switch that did not move,
+   * with no explanation, so the failure is caught and shown here.
+   */
   async function toggle(policy: Policy) {
-    await api.setPolicyEnabled(policy.id, !policy.enabled);
-    await policies.load();
+    message = null;
+    try {
+      await api.setPolicyEnabled(policy.id, !policy.enabled);
+      await policies.load();
+      message = `The policy "${policy.name}" was ${policy.enabled ? "disabled" : "enabled"}.`;
+      messageTone = "ok";
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      message = `The policy "${policy.name}" was not changed: ${detail}`;
+      messageTone = "danger";
+    }
   }
 </script>
 
@@ -57,6 +77,10 @@
           </li>
         {/each}
       </ul>
+    {/if}
+
+    {#if message}
+      <p class="message" class:danger={messageTone === "danger"} role="status">{message}</p>
     {/if}
   </Panel>
 </div>

@@ -21,7 +21,7 @@ use error::{AppError, AppResult};
 /// Build and run the desktop application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -60,8 +60,16 @@ pub fn run() {
             commands_api::simulator_set_speed,
             commands_api::simulator_reset,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running the AgentOps application");
+        .run(tauri::generate_context!());
+
+    // The runtime could not start, so there is no window to report into.
+    // A panic here would print a backtrace that says nothing about the
+    // cause, so the failure is printed and the process leaves with a
+    // failure code instead.
+    if let Err(error) = result {
+        eprintln!("the AgentOps application could not start: {error}");
+        std::process::exit(1);
+    }
 }
 
 /// The application state type, re-exported for the command module.

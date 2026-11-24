@@ -5,8 +5,9 @@ what was fixed, and what is still open. Updated after each phase.
 
 ## Session
 
-- **Project:** AgentOps v0.1
-- **Output path:** `/Users/servicecentre/playground/agentops`
+- **Project:** AgentOps
+- **Repository root:** the root of this repository. Every path in this
+  document is relative to it.
 - **Skill:** `agentops-v01-builder`
 - **Scope:** v0.1 only. Local and synthetic. No network, no real agent, no
   live infrastructure.
@@ -677,24 +678,284 @@ and the scanner's own twenty-eight regression cases still pass.
 - **The simulator is still deterministic** and still driven from the
   frontend.
 
+## Phase 8 — The v0.1.2 maintenance release
+
+A maintenance, correctness, portability, verification and documentation
+release. No screen changed, no command was added or removed, and the
+database schema did not change: a v0.1 database opens as a v0.1.2
+database.
+
+### The nine items an independent review raised
+
+Each was checked against the code before anything was changed. Two were
+already correct in the repository and are recorded as such.
+
+1. **The build and CI configuration still referenced Node.js 20.**
+   CONFIRMED and FIXED. `.github/workflows/ci.yml` asked for
+   `node-version: "20"` in two places. The baseline is now Node.js 24,
+   and `.node-version` carries `24`.
+
+2. **The packaging documentation still permitted Node.js 20.**
+   CONFIRMED and FIXED. `docs/PACKAGING.md` said "Node 20 or newer"; it
+   now says Node.js 24.
+
+3. **The test counts in the engineering documentation were stale.**
+   CONFIRMED and FIXED. `BUILD_STATE.md` said thirty-six frontend tests
+   and thirty-three Rust tests. The measured numbers are in the table
+   below.
+
+4. **The scanner test counts in the changelog and the documentation were
+   stale.** CONFIRMED and FIXED. The scanner's own regression test now
+   runs fifty cases, up from twenty-eight.
+
+5. **The privacy scanner had a four megabyte limit whose behaviour and
+   documentation needed improving.** CONFIRMED and FIXED. An oversized
+   file used to disappear from verification without a word. It is now
+   reported, and the verification fails until a person has looked at it.
+
+6. **Windows was not in the continuous integration matrix.** CONFIRMED
+   and FIXED. The matrix now covers Linux, macOS and Windows.
+
+7. **The approval error handling had no regression test proving that a
+   real SQLite failure is not turned into a not-found error.** CONFIRMED
+   and FIXED. `src-tauri/tests/approval_errors.rs` now proves it.
+
+8. **There was no automated packaged desktop or end-to-end coverage.**
+   CONFIRMED, and addressed as far as it honestly can be. The frontend
+   command boundary now has integration tests that drive the real
+   components. Automated packaged desktop testing is still not
+   implemented, and the limitation is kept.
+
+9. **Some release and build documentation described results that were
+   not derived from the verification scripts.** CONFIRMED and FIXED. The
+   counts in the documentation are now measured by the sweep, and the
+   sweep prints what it measured.
+
+### Two items that were already correct
+
+- The capability set was already `core:default` alone, with no HTTP,
+  shell, filesystem, process, clipboard or updater permission.
+- The native build check was already in the sweep. It was kept, and its
+  meaning is now stated precisely: it proves the application compiles
+  and links. It does not prove that a bundle, an installer, a signature
+  or a notarisation exists.
+
+### What changed in the code
+
+- **The privacy scanner now decides what happened to every file.**
+  Six verdicts: scanned, binary skipped, generated excluded, oversize
+  review required, unreadable, and a violation. An oversized file that
+  could hold source, a script or a configuration is reported and the
+  verification fails. A known dependency lockfile is not exempt: it is
+  searched a line at a time, with the same patterns as every other file.
+  The value that matched is never printed.
+- **The scanner reports six counters** at the end of every run.
+- **The approval lookup is now proved.** A missing approval is reported
+  as not found; a broken lookup is reported as a database error. The
+  failure is manufactured with a column removed from the test's own
+  database, so the production code carries no test hook.
+- **A policy update that fails now says so.** The command's error was
+  swallowed, so a policy that was not there left the operator looking at
+  a switch that had not moved, with no explanation.
+- **The application no longer panics when the window cannot open.** It
+  prints the reason and leaves with a failure code.
+- **The frontend integration tests exist.** Eighteen tests drive the
+  real components against a deterministic mock of the command boundary:
+  the shell, the navigation, the overview, the agent and run searches,
+  the approval decision and its failure, the policy toggle and its
+  not-found failure, the simulator, and the settings contract.
+
+### What the manual smoke test found
+
+The application was launched on this host and driven through its
+accessibility tree. The screen itself cannot be captured — there is a
+window server but no attached display — so the checks were made against
+what the accessibility tree exposes, which is what the frontend renders.
+The driver used for it is not part of this repository's toolchain, so
+the smoke test itself is not committed here; the checklist it followed is
+in `docs/TESTING.md`, and a person can walk it by hand.
+
+Thirty-six checks were made against the running window, and one of them
+failed.
+
+- **The confirmation of an approval was never shown.** The confirmation
+  was rendered inside the detail drawer, and a decided approval leaves
+  the pending list, so the drawer closed and the message went with it.
+  The operator approved an approval and was told nothing. The
+  confirmation is now rendered outside the drawer, and a regression test
+  covers it.
+
+The other thirty-five checks passed: the shell renders with its palette
+and its summary, all twelve views open with their own content, the agent
+search narrows the registry, the approval queue shows the pending
+approvals, the policy toggle is confirmed, the simulator starts and
+pauses, the settings form and the demo data panel are there, and the
+approval decision reaches the audit log.
+
+### Making the Windows build a real gate
+
+The sweep proved that the application compiles and links on Windows. It
+did not prove that the Windows *application* — the `.msi` and the NSIS
+installer — can be produced, because the sweep deliberately does not
+bundle. The continuous integration had no job that did the bundling
+either, so nothing in the build ever touched the WebView2 loader, the
+`.ico`, WiX or NSIS.
+
+- **A `windows-app` job** now runs the Tauri bundler on
+  `windows-latest` and fails if no installer comes out. It is its own
+  job rather than another step in the matrix, so a bundling failure is
+  visible on its own.
+- **The bridge that makes `cargo tauri ...` work is now its own script**,
+  `scripts/ensure_cargo_tauri.py`. The sweep and the new job call it, so
+  there is one implementation of it rather than two.
+- **The line endings are pinned.** `.gitattributes` says every text file
+  is checked out with line feeds on every platform, which is what keeps
+  `scripts/verify.sh`'s shebang working on a Windows checkout.
+
+### What was checked here, and what was not
+
+The application was checked against a Windows target on this host, which
+is not Windows:
+
+| Check | Result |
+|---|---|
+| `cargo check --target x86_64-pc-windows-gnu --all-targets` | passes — the whole tree, including the bundled SQLite C code, `webview2-com`, `muda` and `tao` |
+| `cargo check --target x86_64-pc-windows-msvc --all-targets` | passes — the target the continuous integration uses, including the Windows resource embedding that carries the icon and the version into the binary |
+
+The MSVC check needed `llvm-rc` for the resource compiler, which is in
+the keg-only `llvm@22` Homebrew formula and is therefore not on the path
+by default. The bundled SQLite is the one part of the MSVC target that
+cannot be checked here, because it needs Microsoft's own C compiler; the
+check was made with that feature off, and the manifest and the lockfile
+were restored exactly afterwards.
+
+What this proves: the code compiles for Windows. What it does not prove:
+that the installer is produced, and that the application runs. Those are
+the continuous integration's to report, and until that job has run,
+Windows is unverified.
+
+### The verification system
+
+The checks now live in `scripts/verify.py`, so `scripts/verify.sh` for
+macOS and Linux and `scripts/verify.ps1` for Windows run the same
+checks in the same order. The two entry points cannot drift apart,
+because there is only one list of checks.
+
+A check that cannot run is reported as a skip, with the reason, and is
+never counted as a pass.
+
+### The measured results
+
+Measured during the v0.1.2 acceptance run, on Node.js 24.22.3 with npm
+11.19.1 and Rust 1.93.1.
+
+| | v0.1.0 | v0.1.1 | v0.1.2 |
+|---|---|---|---|
+| Rust tests | 33 | 46 | 49 |
+| Frontend tests | 36 | 42 | 60 |
+| Sweep stages | 8 | 13 | 15 |
+| Scanner regression cases | 20 | 28 | 50 |
+| Screens | 12 | 12 | 12 |
+| Typed commands | 23 | 23 | 23 |
+
+The sweep reports fifteen passed, zero failed and zero skipped.
+
+### The Rust dependency audit, and what it found
+
+`cargo audit` was installed on this host, so the stage that used to be a
+skip is now a gate. It denies warnings, not only vulnerabilities: an
+unmaintained, an unsound or a yanked crate fails the sweep too.
+
+It found one vulnerability. `RUSTSEC-2026-0459` — the bundled SQLite C
+library, through `rusqlite` — carried `CVE-2026-119375`, medium
+severity, 6.8. The application compiles SQLite into its binary, so the
+defect would have shipped with it. `rusqlite` moved from 0.32 to 0.43
+and `libsqlite3-sys` from 0.30.1 to 0.40.0, which is past the 0.39.0
+that carries the fix. The application's own use of the library did not
+change: the same calls compile, all forty-nine Rust tests pass, the
+clippy gate is clean, and the upgrade needs Rust 1.89, which is below
+the declared minimum of 1.90.
+
+Three warnings remain, and none of them can be closed by a compatible
+upgrade:
+
+| Advisory | Package | Path | Kind | Exercised here |
+|---|---|---|---|---|
+| RUSTSEC-2026-0543 | chrono | agentops → chrono | unmaintained | Only on the application's own timestamps |
+| RUSTSEC-2024-0429 | glib | agentops → tauri → gtk → glib (Linux only) | unsound | No: not in the macOS or Windows build |
+| RUSTSEC-2024-0370 | proc-macro-error | agentops → tauri → gtk → glib → glib-macros → proc-macro-error (Linux only) | unmaintained | No: a build-time dependency of the Linux GTK bindings |
+
+Each is listed in `scripts/rust_audit_allowlist.json` with its reason
+and the action that would close it. The audit still fails on anything
+that is not listed there, and the gate was proved by putting the
+vulnerable binding back: it reported the vulnerability and failed.
+
+`cargo-audit` 0.23 does not read an `audit.toml` configuration file, so
+the list is a file the sweep reads and passes to the tool as
+exclusions. The `audit.toml` that was tried first was removed rather
+than left in place doing nothing.
+
 ## Known limitations
 
 These are genuinely outside v0.1 and are recorded rather than hidden.
 
-- **No end-to-end browser test.** Playwright is not configured for this
-  environment. The functional checks that need a window are listed in
-  `docs/TESTING.md` as manual steps.
+- **No automated packaged desktop test.** The frontend command boundary
+  is covered by integration tests that drive the real components, but
+  there is no automation that launches the built application and drives
+  its window. The functional checks that need a window are listed in
+  `docs/TESTING.md` as a manual smoke checklist.
 - **No DMG on this host**, for the Finder reason recorded above.
-- **`cargo audit` is not installed here.** The dependency-audit tool that
-  is available (`npm audit`) was run; the unavailable one is recorded as a
-  limitation rather than skipped silently.
+- **Three Rust advisories are accepted rather than closed.** They are
+  warnings, not vulnerabilities, and none can be closed by an upgrade
+  that is compatible with this release. They are listed in
+  `scripts/rust_audit_allowlist.json` with their reason and their
+  action, and the audit still denies them if they are not listed there.
 - **The visual design has not been reviewed in a running window.** The
   layout, the focus states and the responsive behaviour are implemented and
   type-checked, but this host has no interactive display to look at them.
+- **The Windows job has not run here.** The continuous integration
+  configuration covers Windows and the PowerShell entry point is in
+  place, but a Windows runner is not available on this host, so the
+  Windows result is the continuous integration's to report, not this
+  document's.
+- **The development toolchain has advisories.** Six, all in the test and
+  build tools, none of them in the shipped application. They are listed
+  in `docs/SECURITY.md`.
 
 ## Remaining
 
 Nothing is outstanding. Every acceptance command has been run and passes.
+
+## The v0.1.2 release
+
+The release is cut the same way the v0.1.1 release was: a maintenance
+branch is merged into `main` with `--no-ff`, the sweep runs again on the
+merge commit, and the tag is made on the merge commit, so the tag and
+`main` always name the same tree.
+
+The branch is verified before the merge in three ways:
+
+- the sweep passes locally on Node.js 24;
+- the continuous integration passes on the branch head, on Linux, macOS
+  and Windows;
+- the sweep passes again on the merge commit, before the tag is made.
+
+The continuous integration conclusions are read from the job list and the
+test summaries in the logs, never from the badge alone.
+
+### What the release contains
+
+| | v0.1.1 | v0.1.2 |
+|---|---|---|
+| Rust tests | 46 | 49 |
+| Frontend tests | 42 | 60 |
+| Sweep stages | 13 | 15 |
+| Scanner regression cases | 28 | 50 |
+| Screens | 12 | 12 |
+| Typed commands | 23 | 23 |
+
+No screen changed, no command was added or removed, and the database
+schema did not change: a v0.1 database opens as a v0.1.2 database.
 
 ## The v0.1.1 release
 

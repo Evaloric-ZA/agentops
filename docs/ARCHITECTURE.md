@@ -19,6 +19,8 @@ agentops/
 ├── LICENSE
 ├── package.json
 ├── package-lock.json
+├── .node-version                the Node.js baseline: 24
+├── .gitattributes               the line endings are the same on every platform
 ├── svelte.config.js
 ├── tsconfig.json
 ├── tsconfig.node.json
@@ -36,7 +38,8 @@ agentops/
 │   ├── stores/app.ts           navigation, theme, settings
 │   ├── stores/data.ts          the resource status pattern
 │   ├── styles/app.css          CSS variables, light and dark themes
-│   └── tests/                  the frontend unit tests
+│   └── tests/                  the frontend tests: the unit tests and the
+│                               integration tests at the command boundary
 ├── src-tauri/
 │   ├── Cargo.toml
 │   ├── build.rs
@@ -44,6 +47,7 @@ agentops/
 │   ├── capabilities/default.json
 │   ├── migrations/             (the schema lives in db/migrations.rs)
 │   ├── icons/
+│   ├── tests/                  the Rust integration tests
 │   └── src/
 │       ├── main.rs             a thin binary
 │       ├── lib.rs              the application builder
@@ -58,11 +62,20 @@ agentops/
 ├── docs/
 ├── CHANGELOG.md
 └── scripts/
-    ├── verify.sh                 the sweep: eleven checks, one line each
-    ├── verify_repo.py            the structure and privacy scan
-    ├── test_verify_repo.py       the privacy scan's own regression test
-    └── check_version.py          the manifests must agree on the version
+    ├── verify.py                the sweep: the checks themselves, one line each
+    ├── verify.sh                the sweep entry point for macOS and Linux
+    ├── verify.ps1               the sweep entry point for Windows
+    ├── ensure_cargo_tauri.py    the bridge that makes `cargo tauri ...` work
+    ├── verify_repo.py           the structure and privacy scan
+    ├── test_verify_repo.py      the privacy scan's own regression test
+    ├── check_version.py         the manifests must agree on the version
+    ├── check_msrv.py            the declared minimum Rust must be true
+    └── check_types.py           the Rust enums and the TypeScript unions must agree
 ```
+
+The checks live in one file, `scripts/verify.py`, and the two entry points
+call it. That is deliberate: a platform that ran a different list of
+checks would be a silent difference nobody noticed.
 
 ## The boundary
 

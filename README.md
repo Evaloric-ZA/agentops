@@ -7,8 +7,12 @@ agent registry, a run timeline, and the approvals that need a human.
 **Version 0.1 is a local proof of architecture.** Every record in it is
 synthetic. Nothing here connects to a real agent, a real model, or any
 network service, and no installer for a production deployment is implied.
-v0.1.1 is a maintenance release: no feature is added, no screen changes,
+v0.1.2 is a maintenance release: no feature is added, no screen changes,
 and the data model is unchanged.
+
+The development and continuous integration baseline is **Node.js 24**. The
+minimum supported Rust version is **1.90**. The versions actually tested
+are recorded in [docs/TESTING.md](docs/TESTING.md).
 
 ## What it is
 
@@ -39,6 +43,8 @@ and the data model is unchanged.
 | **Crew** | Compact status rows for every agent |
 
 ## Running it
+
+Node.js 24 is required; `.node-version` carries `24`.
 
 ```bash
 npm ci
@@ -72,10 +78,16 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-features
 bash scripts/verify.sh
 ```
 
-`scripts/verify.sh` runs the whole sweep and prints one line per check:
-eleven of them, covering the frontend, the Rust, the native build, the
-version agreement between the manifests, the privacy scan and the privacy
-scan's own regression test.
+`scripts/verify.sh` runs the whole sweep and prints one line per stage:
+the frontend, the Rust, the native build, the version agreement between
+the manifests, the dependency audits, the privacy scan and the privacy
+scanner's own regression test. The stages are listed in
+[docs/TESTING.md](docs/TESTING.md). On Windows the same sweep is run by
+`scripts/verify.ps1`; the checks themselves live in `scripts/verify.py`,
+so the two platforms run exactly the same checks.
+
+A stage that cannot run is reported as a skip, with its reason, and is
+never counted as a pass.
 
 ## Documentation
 

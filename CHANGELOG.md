@@ -12,6 +12,101 @@ any release.
 
 Nothing yet.
 
+## [0.1.2] - 2026-11-24
+
+A maintenance, correctness, portability, verification and documentation
+release. No feature is added, no screen changes, and the data model is
+unchanged: a v0.1 database opens as a v0.1.2 database.
+
+The development and continuous integration baseline is Node.js 24. Node.js
+20 is no longer supported.
+
+### Added
+
+- **The privacy scanner decides what happened to every file.** It now
+  reports six verdicts — scanned, binary skipped, generated excluded,
+  oversize review required, unreadable, and a violation — and prints the
+  six counters at the end of every run. An oversized file used to
+  disappear from verification without a word; it is now reported, and the
+  verification fails until a person has looked at it. A known dependency
+  lockfile is not exempt from the search: it is read a line at a time,
+  with the same patterns as every other file.
+- **The scanner never prints the value it found.** A finding names the
+  file, the line and the column, and the kind of pattern, and nothing
+  else.
+- **A regression test for the approval error handling.** A missing
+  approval is reported as a missing approval, and a broken lookup is
+  reported as a database error. The failure is manufactured by removing a
+  column from the test's own database, so the production code carries no
+  test hook.
+- **Frontend integration tests at the command boundary.** Eighteen
+  tests drive the real components against a deterministic mock of the
+  command boundary: the shell, the navigation, the overview, the agent
+  and run searches, the approval decision and its failure, the policy
+  toggle and its not-found failure, the simulator, and the settings
+  contract.
+- **Windows in the continuous integration matrix.** The sweep now runs
+  on Linux, macOS and Windows.
+- **A continuous integration job that builds the Windows application.**
+  The sweep compiles and links the application on Windows but does not
+  bundle it, so nothing in the build touched the WebView2 loader, the
+  Windows icon, WiX or NSIS. The `windows-app` job runs the Tauri
+  bundler and fails if no `.msi` or NSIS installer comes out.
+- **One implementation of the `cargo tauri` bridge.** It is now
+  `scripts/ensure_cargo_tauri.py`, called by both the sweep and the
+  Windows job.
+- **The line endings are pinned.** `.gitattributes` checks every text
+  file out with line feeds on every platform, which is what keeps the
+  shell entry point's shebang working on a Windows checkout.
+- **One list of checks for every platform.** The checks live in
+  `scripts/verify.py`, so `scripts/verify.sh` for macOS and Linux and
+  `scripts/verify.ps1` for Windows run the same checks in the same order
+  and cannot drift apart.
+- **A sweep that says what it skipped, and why.** A check that cannot
+  run is reported as a skip with its reason, and is never counted as a
+  pass.
+- **A dependency audit as part of the sweep.** The shipped dependencies
+  are the gate; the advisories in the development toolchain are reported
+  and listed in `docs/SECURITY.md`.
+- **The Rust dependency audit is a gate.** It denies warnings as well as
+  vulnerabilities, so an unmaintained, an unsound or a yanked crate fails
+  the sweep too. The advisories that have been accepted are listed in
+  `scripts/rust_audit_allowlist.json`, each with its reason and the
+  action that would close it; anything not listed fails.
+
+### Fixed
+
+- **The bundled SQLite carried a known vulnerability.** The Rust
+  dependency audit found `RUSTSEC-2026-0459`, `CVE-2026-119375`, medium
+  severity, in the SQLite C library that `rusqlite` compiles into the
+  binary. `rusqlite` moved from 0.32 to 0.43 and `libsqlite3-sys` from
+  0.30.1 to 0.40.0, which is past the 0.39.0 that carries the fix. The
+  application's own use of the library did not change.
+- **A policy update that failed said nothing.** The error was swallowed,
+  so a policy that was not there left the operator looking at a switch
+  that had not moved, with no explanation. The failure is now shown.
+- **The confirmation of an approval was never shown.** It was rendered
+  inside the detail drawer, and a decided approval leaves the pending
+  list, so the drawer closed and the message went with it: the operator
+  approved an approval and was told nothing. The confirmation is now
+  rendered outside the drawer.
+- **The application panicked when the window could not open.** It now
+  prints the reason and leaves with a failure code.
+
+### Changed
+
+- **Node.js 24 is the baseline.** The package manifest declares the
+  engine, `.node-version` carries `24`, and the continuous integration
+  asks for it.
+- **The documentation's counts are measured, not remembered.** The
+  numbers in the documentation come from the sweep's own output.
+- **The native build check is stated precisely.** It proves the
+  application compiles and links. It does not prove that a bundle, an
+  installer, a signature or a notarisation exists.
+- **`rusqlite` moved from 0.32 to 0.43**, to pick up the fix for the
+  SQLite vulnerability above. It needs Rust 1.89, which is below the
+  declared minimum of 1.90.
+
 ## [0.1.1] - 2026-11-24
 
 A maintenance release. No feature is added, no screen changes, and the
@@ -128,9 +223,10 @@ data model is unchanged: a v0.1 database opens as a v0.1.1 database.
 ### Added
 
 - **The privacy scanner has its own regression test** —
-  `scripts/test_verify_repo.py`, twenty cases, standard library only. It
-  builds a throwaway tree for each case and asserts what the scanner does
-  with it, so the false negatives above cannot come back.
+  `scripts/test_verify_repo.py`, twenty cases at the time of that
+  release, standard library only. It builds a throwaway tree for each
+  case and asserts what the scanner does with it, so the false negatives
+  above cannot come back.
 - **The sweep builds the native application.** `cargo test` compiles the
   library and the binary, but the sweep never ran the Tauri build, so a
   tree that could not be assembled as an application still passed. The
