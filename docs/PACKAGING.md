@@ -242,6 +242,36 @@ gate, which runs the gates and the scanners, and the release
 verification, which runs the whole sweep in release mode. Both install
 the pinned audit tool, and both fail if it cannot be installed.
 
+## How releases are made
+
+There is **one branch: `main`**. It always carries the current code,
+and it is the branch a release is cut from.
+
+**A patch release inside v0.1 goes straight onto `main`.** There is no
+branch for it: the change is made, the sweep is run, the commit is
+pushed, and the version is bumped. v0.1.0, v0.1.1, v0.1.2 and v0.1.3
+were all made this way.
+
+**A branch is created for a version bump** — a new minor or major
+version, such as v0.2 — because that is the point at which the work is
+large enough to deserve its own review and its own line of history. The
+branch is merged back into `main` with `--no-ff`, the merge commit is
+what the tag names, and the branch is deleted afterwards. Nothing is
+left on the remote except `main` and the tags.
+
+So the rule is: **v0.1.x changes go straight to `main`; a branch is for
+a version bump.**
+
+Before a release is cut, the release verification has to pass, and the
+version history has to describe what changed:
+
+```bash
+bash scripts/verify.sh --release
+```
+
+The version history is `CHANGELOG.md`. It records every release, what
+changed in it and what it fixed, and each version is a tag.
+
 ## The application data directory
 
 On first launch the application creates its database and seeds it:
