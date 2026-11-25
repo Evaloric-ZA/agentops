@@ -1197,8 +1197,10 @@ Re-checked for this release: no frontend networking API, no Rust
 networking crate, no HTTP capability, no updater configuration, no
 telemetry, no analytics, no crash upload, no remote asset. The Tauri
 capability set is still `core:default`, and the Tauri dependency still
-carries no plugin. The privacy scanner scanned ninety-nine files and
-found no violation.
+carries no plugin. The privacy scanner found no violation. It scans
+ninety-nine files in the local working tree and ninety-seven in a
+fresh checkout; the two extra are the local editor state and the
+bytecode cache, which are not in the commit.
 
 The continuous integration does download advisory databases. That is a
 build-time action by the build, and it is not the application reaching
