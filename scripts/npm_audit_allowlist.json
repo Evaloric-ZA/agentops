@@ -1,0 +1,13 @@
+{
+  "note": "The npm advisories that are accepted. The gate runs `npm audit --json` and applies this file's policy itself: a Critical or a High advisory fails the gate unless it is listed here. An entry is a dated decision, not a permanent exemption. The list is empty at the start of the v0.1.3 release because the Vitest upgrade closed every advisory that the audit found; it is kept, with its schema and its policy, so that a future exception has one place to live and one place to be reviewed.",
+  "policy": {
+    "fails": ["critical", "high"],
+    "warns": ["moderate"],
+    "reports": ["low", "info"],
+    "scope": "The scope says whether the affected package ships in the desktop application or only runs in the development and continuous integration toolchain. A development-only package is not exempt: developers and the continuous integration execute it.",
+    "expired": "An entry whose review date has passed fails the release gate. Nothing renews it automatically.",
+    "stale": "An entry for an advisory the audit no longer finds fails the release gate. Remove it.",
+    "owner": "project-maintainers"
+  },
+  "advisories": []
+}

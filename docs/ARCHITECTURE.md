@@ -70,12 +70,26 @@ agentops/
     ├── test_verify_repo.py      the privacy scan's own regression test
     ├── check_version.py         the manifests must agree on the version
     ├── check_msrv.py            the declared minimum Rust must be true
-    └── check_types.py           the Rust enums and the TypeScript unions must agree
+    ├── check_types.py           the Rust enums and the TypeScript unions must agree
+    ├── audit_policy.py          the allowlist schema and the expiry rule
+    ├── npm_audit_gate.py        the JavaScript dependency gate
+    ├── rust_audit_gate.py       the Rust dependency gate
+    ├── npm_audit_allowlist.json the accepted npm advisories, with their dates
+    ├── rust_audit_allowlist.json the accepted Rust advisories, with their dates
+    └── test_audit_policy.py     the two gates' own regression test
 ```
 
 The checks live in one file, `scripts/verify.py`, and the two entry points
 call it. That is deliberate: a platform that ran a different list of
 checks would be a silent difference nobody noticed.
+
+The two dependency gates live in their own files for the same reason. The
+continuous integration security job runs them on their own, without the
+compile and the unit tests, and their rules have to be testable without a
+registry or an advisory database — so the policy is applied by the gate
+rather than by the audit tool's exit code. `scripts/audit_policy.py`
+holds the schema both allowlists are validated against and the rule that
+decides when an exception has expired.
 
 ## The boundary
 

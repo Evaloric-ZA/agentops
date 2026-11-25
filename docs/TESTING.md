@@ -85,13 +85,18 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-features
 python3 scripts/check_version.py .
 python3 scripts/check_msrv.py .
 python3 scripts/test_verify_repo.py
+python3 scripts/test_audit_policy.py
 python3 scripts/check_types.py .
 python3 scripts/verify_repo.py .
 npm run tauri -- build --debug --no-bundle
-npm audit --omit=dev
 
-bash scripts/verify.sh          # macOS and Linux
-pwsh ./scripts/verify.ps1       # Windows
+bash scripts/verify.sh              # the developer verification, macOS and Linux
+pwsh ./scripts/verify.ps1           # the developer verification, Windows
+bash scripts/verify.sh --release    # the release verification
+pwsh ./scripts/verify.ps1 --release # the release verification, Windows
+
+python3 scripts/npm_audit_gate.py --release .
+python3 scripts/rust_audit_gate.py --release .
 ```
 
 `npm run check` must report **0 errors and 0 warnings**: `svelte-check`
@@ -121,22 +126,41 @@ never counted as a pass.
 | the version check | Every manifest agrees on the version |
 | the minimum supported Rust check | The declared minimum compiler is true |
 | the scanner's regression test | The privacy scanner still catches what it must |
+| the audit policy's regression test | The dependency gates fail when they should |
 | the type vocabulary check | The Rust enums and the TypeScript unions agree |
 | the native build | The application compiles and links as an application |
-| the production dependency audit | The shipped dependencies have no advisory |
-| the development dependency audit | Reported, with the advisories listed in `docs/SECURITY.md` |
-| the Rust dependency audit | The Rust tree has no vulnerability, and no unmaintained, unsound or yanked crate that is not accepted in `scripts/rust_audit_allowlist.json` |
+| the npm dependency audit | No Critical or High advisory in the whole JavaScript tree, the development toolchain included |
+| the Rust dependency audit | No vulnerability, and no unmaintained, unsound or yanked crate that is not accepted in `scripts/rust_audit_allowlist.json` |
 | the privacy verifier | The required paths exist and nothing is embedded |
 
-During the v0.1.2 acceptance run the sweep reported **fifteen passed,
+During the v0.1.3 acceptance run the sweep reported **sixteen passed,
 zero failed and zero skipped**.
 
-The Rust dependency audit denies warnings, so it fails on an unmaintained
-or an unsound crate as well as on a vulnerability. Three advisories are
-accepted and listed in `scripts/rust_audit_allowlist.json`, each with
-its reason and the action that would close it; they are described in
-`docs/SECURITY.md`. When `cargo-audit` is not installed the stage is
-reported as a skip with that reason, never as a pass.
+### The two modes
+
+The same sweep runs in two modes, and the difference is the whole point
+of the v0.1.3 release.
+
+| | Developer verification | Release verification |
+|---|---|---|
+| the command | `bash scripts/verify.sh` | `bash scripts/verify.sh --release` |
+| a check that cannot run | reported as a **skip**, and the sweep still passes | a **failure**, and the sweep fails |
+| `cargo-audit` not installed | the Rust audit is skipped | the Rust audit fails |
+| the registry unreachable | the npm audit is skipped | the npm audit fails |
+| an expired advisory exception | reported as a warning | a failure |
+
+The developer mode exists so that somebody working offline can still run
+the rest of the sweep. It is not a weaker release gate: it is a different
+command, and the release gate is the one that refuses to pass when a
+control did not run.
+
+The two dependency gates can also be run on their own, which is what the
+continuous integration security job does. They exit with 0 when they
+pass, 1 when they fail and 2 when they could not run, so that the sweep
+can tell a check that passed from a check that did not happen.
+
+`docs/SECURITY.md` describes the policy itself: what fails, what warns,
+what is reported, how an exception is written and when it expires.
 
 ## The privacy check
 
@@ -238,18 +262,64 @@ followed without asking questions.
 - [ ] Keyboard navigation reaches every control and the focus is always
       visible.
 
-## Not tested
+## The packaged desktop smoke test
 
-**Automated packaged desktop end-to-end testing is not yet implemented.**
-No automation launches the built application and drives its window.
+### The gap, stated precisely
 
-What exists is the integration layer described above: the real components
-are driven against a deterministic mock of the command boundary, which
-covers what the operator sees and what the frontend sends. What it does
-not cover is the native window, the webview, the real IPC bridge and the
-application's own start-up.
+**Automated packaged desktop end-to-end testing is not implemented.** No
+automation in this repository launches the built application and drives
+its window. Against the ten things a packaged smoke test has to
+demonstrate:
 
-Native webview automation would need a test harness that is reliable
-across three platforms and a webview version. Rather than add one that
-fails intermittently and is then trusted, the limitation is kept and the
-manual checklist above is the substitute.
+| | What would demonstrate it | The state today |
+|---|---|---|
+| 1 | the Tauri process starts | observed by hand during acceptance; not automated |
+| 2 | the Rust backend initialises | observed by hand during acceptance; not automated |
+| 3 | the SQLite database opens | proven by the Rust test suite, on disk and in memory |
+| 4 | the migrations run | proven by the Rust test suite: the migrations apply once and are recorded |
+| 5 | the seed data loads | proven by the Rust test suite: every seeded row is asserted |
+| 6 | the main webview opens | observed by hand during acceptance; not automated |
+| 7 | the frontend IPC works | the frontend tests drive the real components against a mock boundary; the real bridge is not driven |
+| 8 | the Night Shift data renders | proven against the mock boundary, not against the real backend |
+| 9 | one harmless command roundtrip succeeds | proven against the mock boundary, not against the real backend |
+| 10 | the application exits cleanly | not proven |
+
+So three of the ten are covered by the automated suite, four are covered
+against a mock of the command boundary rather than against the real
+bridge, and three are covered only by a person looking at the
+application.
+
+### What was evaluated, and what was decided
+
+A packaged smoke harness has to drive a **native webview**, not a
+browser. That rules out the browser automation tools: Playwright and
+WebDriver drive a browser engine, and the Tauri window embeds the
+platform's own webview — WebView2 on Windows, WebKitGTK on Linux, WKWebView
+on macOS. Driving those means a different tool on each platform, and the
+macOS one has no supported automation interface at all.
+
+The other option is to inspect the running application's accessibility
+tree rather than its pixels. That works, and it was used during the
+v0.1.2 acceptance run to check thirty-six assertions against the real
+built application. It needs an external driver that is not part of the
+Rust or JavaScript toolchain and is not available on every platform, so
+it cannot be a continuous integration gate without adding a dependency
+the project does not otherwise have.
+
+**Decision: the manual smoke checklist above stays, and the packaged
+smoke harness is a v0.1.x follow-up.** The reasons are that a harness
+that only works on one platform is not a release gate, that a harness
+that fails intermittently is worse than none, and that the supply-chain
+work in this release is not blocked by it. Writing the harness badly
+would cost more than it gives.
+
+### The follow-up, in enough detail to be picked up
+
+The harness that should be written next has to demonstrate the ten
+things above, and it has to do it on three platforms without a display.
+The shape that satisfies both constraints is a small native test binary
+in `src-tauri/tests/` that opens the real database, runs the real
+migrations, loads the real seed, calls one typed command through the
+same command surface the frontend uses, and exits — with the webview
+assertions driven through the accessibility tree on the platforms that
+can, and recorded as not observed on the one that cannot.

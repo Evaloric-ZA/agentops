@@ -40,5 +40,7 @@ if (-not $python) {
     exit 1
 }
 
-& $python (Join-Path $root "scripts\verify.py") $root
+# Any arguments are passed on, so `scripts/verify.ps1 --release` runs the
+# release verification rather than the developer one.
+& $python (Join-Path $root "scripts\verify.py") $root $args
 exit $LASTEXITCODE

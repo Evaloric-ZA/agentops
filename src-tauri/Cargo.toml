@@ -1,6 +1,6 @@
 [package]
 name = "agentops"
-version = "0.1.2"
+version = "0.1.3"
 description = "AgentOps - a local, synthetic agent operations console."
 edition = "2021"
 # The true minimum, established by `cargo metadata` and verified by the

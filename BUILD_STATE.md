@@ -1024,3 +1024,195 @@ test summaries in the logs, never from the badge alone.
 
 No screen changed, no command was added or removed, and the database
 schema did not change: a v0.1 database opens as a v0.1.1 database.
+
+## Phase 8 — The v0.1.3 supply-chain security release
+
+A maintenance release. No feature is added, no screen changes, no
+command is added or removed, and the database schema does not change: a
+v0.1 database opens as a v0.1.3 database, and no persisted timestamp
+format changes.
+
+The purpose was to turn the dependency audits from advisory tooling into
+a deterministic, enforceable release-security gate.
+
+### The baseline, recorded before anything was changed
+
+| | |
+|---|---|
+| The commit | `502ec4d02f9669d45ffba54b075288a0d2703fd0` |
+| The branch | `main` |
+| The application version | 0.1.2 |
+| Node | v26.13.1 installed; v24.22.3 at the declared baseline |
+| npm | 11.20.0 installed; 11.19.1 at the declared baseline |
+| Rust | 1.93.1 |
+| Cargo | 1.93.1 |
+| Python | 3.9.6 |
+| The operating system family | Darwin |
+| The CPU architecture | arm64 |
+| The working tree | clean |
+
+The sweep was run before the first edit and reported **fifteen passed,
+zero failed and zero skipped**. The six npm advisories were reported as
+a note, and the Rust audit was a gate that a missing tool could turn
+into a skip. Those two facts are what this phase changed.
+
+### The JavaScript dependency audit
+
+The actual state, measured rather than assumed: `npm audit` reported
+**six vulnerabilities — two critical, one high, three moderate**. The
+prompt's assumed versions were partly wrong: the Vitest chain was
+2.1.9 with tinypool 1.1.1, and the esbuild that was flagged was the
+nested copy under `vite-node`, not the direct one, which was already
+0.25.12.
+
+| Package | Severity | Advisories | Path |
+|---|---|---|---|
+| tinypool 1.1.1 | critical | GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr | vitest → tinypool |
+| vitest 2.1.9 | critical | GHSA-5xrq-8626-4rwp, GHSA-82fw-gwwq-j7x9 | vitest |
+| vite | high | eight advisories | vitest → vite |
+| @vitest/mocker | moderate | GHSA-82fw-gwwq-j7x9, GHSA-qxg6-89mg-rqv8 | vitest → @vitest/mocker |
+| esbuild | moderate | GHSA-67mh-4wv8-2f99 | vitest → vite-node → esbuild |
+| vite-node | moderate | depends on vite | vitest → vite-node |
+
+Every one of them is in the development and test toolchain. None of them
+ships, and the running application exercises none of them — but
+developers and the continuous integration execute all of them, so they
+were gated rather than reported.
+
+The fix was made deliberately, with
+`npm install --save-dev vitest@^5.1.1`, and not with
+`npm audit fix --force`. Vitest 5.1.1 accepts `vite ^6.4.0 || ^7.0.0 ||
+^8.0.0`, so the project's Vite did not have to move from 6.4.6, and its
+`engines` field accepts Node 24, so the Node baseline did not change.
+One direct dependency changed. `tinypool` and `vite-node` left the tree
+entirely, and the lockfile lost about eleven hundred lines.
+
+After the change `npm audit` reports **no advisories at all** — not none
+that were accepted, none. The whole frontend suite was run after the
+change: sixty tests pass, `svelte-check` reports zero errors and zero
+warnings, and the production bundle assembles.
+
+### The two gates
+
+`scripts/npm_audit_gate.py` and `scripts/rust_audit_gate.py` apply the
+policy themselves rather than leaving it to a tool's exit code, so that
+the rules can be read in one place and tested without a registry or an
+advisory database. `scripts/audit_policy.py` holds the schema and the
+expiry rule that both of them share.
+
+The npm policy fails on Critical and High, warns on Moderate, and
+reports Low and informational. The Rust policy does not distinguish a
+vulnerability from an unmaintained, an unsound or a yanked crate when
+deciding what to do: all of them fail unless the advisory is listed.
+
+The gates exit with 0 when they pass, 1 when they fail and **2 when they
+could not run**, so that the sweep can tell a check that passed from a
+check that did not happen.
+
+Every rule was proved to bite, against the real tools rather than only
+against the policy functions:
+
+| What was done | What happened |
+|---|---|
+| a fake `npm` returning a Critical advisory | the npm gate exited 1 |
+| a fake `npm` that could not reach the registry | the npm gate exited 1 in release mode and 0 in developer mode |
+| `cargo-audit` removed from the path | the Rust gate exited 1 in release mode and 0 in developer mode |
+| one advisory removed from the allowlist | the Rust gate exited 1 |
+| an exception's review date set in the past | the Rust gate exited 1 in release mode and warned in developer mode |
+
+### The release mode
+
+`scripts/verify.py --release` runs the same sweep with one rule changed:
+a check that cannot run is a failure rather than a skip. The developer
+mode is unchanged and stays convenient offline. `scripts/verify.sh` and
+`scripts/verify.ps1` pass the flag through.
+
+### The Rust advisories that are accepted
+
+All three were re-verified: the advisory still exists, the crate is
+still in the lockfile, the dependency paths were re-derived with
+`cargo tree --target all -i`, the reason still applies and the
+remediation still stands.
+
+| Advisory | Crate | Scope | Review by |
+|---|---|---|---|
+| RUSTSEC-2026-0543 | chrono 0.4.45 | runtime | 2027-02-23 |
+| RUSTSEC-2024-0429 | glib 0.18.5 | platform-specific (Linux only) | 2027-01-24 |
+| RUSTSEC-2024-0370 | proc-macro-error 1.0.4 | build-time (Linux only) | 2027-02-23 |
+
+The glib advisory has a patched version — 0.20.0 — but the Tauri 2 line
+does not move to it; a dry-run dependency upgrade confirmed that the GTK
+versions do not change inside that line.
+
+The chrono migration was assessed and deferred. The use was inventoried:
+`src-tauri/src/util.rs` (four helpers that format, parse and subtract
+RFC 3339 strings), `src-tauri/src/simulator/mod.rs` (the current instant)
+and `src-tauri/src/seed.rs` (whole-minute shifts on the seed's own
+timestamps). The stored representation is an RFC 3339 string with whole
+seconds and a `Z` suffix in a `TEXT` column, and the frontend parses
+those strings with the platform's date parser. The migration to `time`
+or `jiff` is small — three files — but it changes the timestamp library
+in the same release as the test-toolchain upgrade, which widens the
+blast radius of the release for an advisory that carries no exploit. It
+is planned for the next maintenance release, with a comparison test
+that asserts the new formatter's output is byte-identical to the old
+one.
+
+### The continuous integration
+
+Two jobs were added.
+
+- **The security gate.** The two gates in release mode, the two
+  allowlist validators, the privacy scanner's regression test and the
+  repository privacy scan. It is independent of the compile and
+  unit-test jobs, and it fails if the security tooling cannot initialise.
+  It needs only `contents: read`.
+- **The release verification.** The whole sweep in release mode, so that
+  the release evidence is machine-verifiable rather than a claim in a
+  document.
+
+`cargo-audit` is installed in both at the pinned version **0.23.0**, with
+`cargo install cargo-audit --version 0.23.0 --locked`, and the installed
+version is printed with `cargo audit --version`. A runner's own copy is
+never trusted, and `cargo install cargo-audit` without a version is not
+used. The repository pins no cache action, so each job that needs the
+tool installs it rather than sharing a cache.
+
+### The runtime is still offline
+
+Re-checked for this release: no frontend networking API, no Rust
+networking crate, no HTTP capability, no updater configuration, no
+telemetry, no analytics, no crash upload, no remote asset. The Tauri
+capability set is still `core:default`, and the Tauri dependency still
+carries no plugin. The privacy scanner scanned one hundred files and
+found no violation.
+
+The continuous integration does download advisory databases. That is a
+build-time action by the build, and it is not the application reaching
+the network.
+
+### The packaged desktop smoke test
+
+The gap is documented precisely in `docs/TESTING.md`: against the ten
+things a packaged smoke test has to demonstrate, three are proven by the
+automated suite, four are proven against a mock of the command boundary
+rather than against the real bridge, and three are covered only by a
+person looking at the application. The options were evaluated and the
+harness is recorded as a v0.1.x follow-up; the reason is that a native
+webview needs a different driver on each platform and macOS has no
+supported one, so a harness that only works on one platform is not a
+release gate. The manual checklist stays.
+
+### What the release contains
+
+| | v0.1.1 | v0.1.2 | v0.1.3 |
+|---|---|---|---|
+| Rust tests | 41 | 49 | 49 |
+| Frontend tests | 42 | 60 | 60 |
+| Sweep stages | 13 | 15 | 16 |
+| Scanner regression cases | 28 | 50 | 50 |
+| Audit policy regression cases | — | — | 44 |
+| Screens | 12 | 12 | 12 |
+| Typed commands | 23 | 23 | 23 |
+| Accepted Rust advisories | 0 | 3 | 3, all with review dates |
+| Unresolved npm advisories | — | 6 | 0 |
