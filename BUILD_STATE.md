@@ -1184,7 +1184,7 @@ Re-checked for this release: no frontend networking API, no Rust
 networking crate, no HTTP capability, no updater configuration, no
 telemetry, no analytics, no crash upload, no remote asset. The Tauri
 capability set is still `core:default`, and the Tauri dependency still
-carries no plugin. The privacy scanner scanned one hundred files and
+carries no plugin. The privacy scanner scanned ninety-nine files and
 found no violation.
 
 The continuous integration does download advisory databases. That is a
@@ -1234,7 +1234,7 @@ release gate. The manual checklist stays.
 | Rust tests | 41 | 49 | 49 |
 | Frontend tests | 42 | 60 | 60 |
 | Sweep stages | 13 | 15 | 16 |
-| Scanner regression cases | 28 | 50 | 50 |
+| Scanner regression cases | 28 | 50 | 53 |
 | Audit policy regression cases | — | — | 44 |
 | Screens | 12 | 12 | 12 |
 | Typed commands | 23 | 23 | 23 |

@@ -416,6 +416,29 @@ def format_summary(result: ScanResult) -> list[str]:
     ]
 
 
+SOURCE_DIRECTORIES = ("src", "src-tauri/src")
+
+
+def empty_source_files(root: Path) -> list[str]:
+    """The source files that exist but were never written.
+
+    An empty source file is usually an edit that went to the wrong
+    path: the file was created, and the content landed somewhere else.
+    The compiler never sees it, because nothing declares it as a
+    module, so nothing else notices it either. One of these sat in the
+    tree through a release before somebody looked at the file list.
+    """
+    found: list[str] = []
+    for directory in SOURCE_DIRECTORIES:
+        base = root / directory
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if path.is_file() and path.stat().st_size == 0:
+                found.append(str(path.relative_to(root)))
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
@@ -426,6 +449,8 @@ def main() -> int:
     for item in REQUIRED:
         if not (root / item).exists():
             errors.append(f"missing required path: {item}")
+    for empty in empty_source_files(root):
+        errors.append(f"the source file {empty} is empty")
 
     result = scan(root)
     errors.extend(result.findings)

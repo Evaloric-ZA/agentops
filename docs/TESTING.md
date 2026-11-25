@@ -184,9 +184,17 @@ in a `.sh`, `.env`, `.lock` or `.py` file was not detected. It also
 required a quoted value and a bare key, so the usual unquoted `.env` form
 and the usual quoted JSON form both passed.
 
-`scripts/test_verify_repo.py` is the scanner's own regression test: fifty
-cases, each building a throwaway tree and asserting what the scanner does
-with it. It runs with a plain `python3` and needs no third-party package.
+`scripts/test_verify_repo.py` is the scanner's own regression test:
+fifty-three cases, each building a throwaway tree and asserting what the
+scanner does with it. It runs with a plain `python3` and needs no
+third-party package.
+
+The scanner also fails on an **empty file in the source directories**.
+An empty source file is usually an edit that went to the wrong path: the
+file is created, and the content lands somewhere else. Nothing declares
+the stray as a module, so the compiler never sees it and nothing else
+notices it either — one of them sat in the tree through two releases
+before somebody looked at the file list.
 
 The scanner decides one of six things about every file — scanned, binary
 skipped, generated excluded, oversize review required, unreadable, or a

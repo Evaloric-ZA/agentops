@@ -362,6 +362,21 @@ def main() -> int:
     expect_clean("an ordinary shell script", "#!/bin/sh\necho hello\n")
     expect_clean("a binary file", "some bytes", binary=True)
 
+    # An empty source file is usually an edit that went to the wrong
+    # path: the file was created and the content landed somewhere else.
+    # The compiler never sees it, so nothing else would notice it.
+    empty_root = build({"src/empty.rs": "", "src/full.rs": "fn main() {}\n"})
+    empty = verify_repo.empty_source_files(empty_root)
+    report("an empty source file is found", empty == ["src/empty.rs"], str(empty))
+    report(
+        "a source file with content is not flagged",
+        verify_repo.empty_source_files(build({"src/full.rs": "fn main() {}\n"})) == [],
+    )
+    report(
+        "an empty file outside the source directories is not flagged",
+        verify_repo.empty_source_files(build({"docs/notes.md": ""})) == [],
+    )
+
     print()
     print(f"{PASSED} passed, {FAILED} failed, {SKIPPED} skipped")
     return 1 if FAILED else 0

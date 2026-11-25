@@ -10,7 +10,18 @@ any release.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **An empty source file was sitting in the tree.**
+  `src-tauri/src/runs.rs` was created by a scripted edit in the v0.1.1
+  audit pass that wrote to a path without the `commands/` component. The
+  content landed in `src-tauri/src/commands/runs.rs`, which is where the
+  wildcard-escaping fix for the run search went, and nothing declares
+  the stray as a module, so the compiler never saw it. No change was
+  lost: it was a file that existed and held nothing, and it went
+  unnoticed through two releases. The privacy scanner now fails on an
+  empty file in the source directories, and three cases in its
+  regression test cover the rule.
 
 ## [0.1.3] - 2026-11-25
 
