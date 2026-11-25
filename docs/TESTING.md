@@ -185,16 +185,28 @@ required a quoted value and a bare key, so the usual unquoted `.env` form
 and the usual quoted JSON form both passed.
 
 `scripts/test_verify_repo.py` is the scanner's own regression test:
-fifty-three cases, each building a throwaway tree and asserting what the
+sixty-two cases, each building a throwaway tree and asserting what the
 scanner does with it. It runs with a plain `python3` and needs no
 third-party package.
 
-The scanner also fails on an **empty file in the source directories**.
-An empty source file is usually an edit that went to the wrong path: the
-file is created, and the content lands somewhere else. Nothing declares
-the stray as a module, so the compiler never sees it and nothing else
-notices it either — one of them sat in the tree through two releases
+The scanner also fails on a **source file that holds nothing**. An empty
+source file is usually an edit that went to the wrong path: the file is
+created, and the content lands somewhere else. Nothing declares the
+stray as a module, so the compiler never sees it and nothing else
+notices it either — one of them sat in the tree through three releases
 before somebody looked at the file list.
+
+The rule covers all four source directories: `src`, `src-tauri/src`,
+`src-tauri/tests` and `scripts`. The first version looked at two of
+them and missed two others, so an empty integration test and an empty
+sweep script were both invisible — and an empty sweep script is the
+worse of the two, because it exits with a success and reports nothing,
+which looks exactly like a sweep that found no problems. A file holding
+nothing but whitespace is reported as well: it declares an empty module,
+which is the same defect as a file with no bytes in it. The check uses
+the scanner's own walk, so the generated directories, the symbolic links
+and the unreadable files are handled the way the scan itself handles
+them.
 
 The scanner decides one of six things about every file — scanned, binary
 skipped, generated excluded, oversize review required, unreadable, or a

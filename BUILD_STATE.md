@@ -709,6 +709,19 @@ already correct in the repository and are recorded as such.
    stale.** CONFIRMED and FIXED. The scanner's own regression test now
    runs fifty cases, up from twenty-eight.
 
+5. **The empty-source-file rule did not cover the whole source tree.**
+   CONFIRMED and FIXED. The rule looked at `src` and `src-tauri/src`
+   and missed `src-tauri/tests` and `scripts`, so an empty integration
+   test and an empty sweep script were both invisible. An empty sweep
+   script is the worse of the two: it exits with a success and reports
+   nothing, which is indistinguishable from a sweep that found no
+   problems. The rule now covers all four directories, uses the
+   scanner's own walk so the generated directories, the symbolic links
+   and the unreadable files are handled the way the scan handles them,
+   and reports a file that holds nothing but whitespace. Nine mutations
+   of the rule are caught by the regression test, which now holds
+   sixty-two cases.
+
 5. **The privacy scanner had a four megabyte limit whose behaviour and
    documentation needed improving.** CONFIRMED and FIXED. An oversized
    file used to disappear from verification without a word. It is now
@@ -1234,7 +1247,7 @@ release gate. The manual checklist stays.
 | Rust tests | 41 | 49 | 49 |
 | Frontend tests | 42 | 60 | 60 |
 | Sweep stages | 13 | 15 | 16 |
-| Scanner regression cases | 28 | 50 | 53 |
+| Scanner regression cases | 28 | 50 | 62 |
 | Audit policy regression cases | — | — | 44 |
 | Screens | 12 | 12 | 12 |
 | Typed commands | 23 | 23 | 23 |

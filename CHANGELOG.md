@@ -18,10 +18,26 @@ any release.
   content landed in `src-tauri/src/commands/runs.rs`, which is where the
   wildcard-escaping fix for the run search went, and nothing declares
   the stray as a module, so the compiler never saw it. No change was
-  lost: it was a file that existed and held nothing, and it went
-  unnoticed through two releases. The privacy scanner now fails on an
-  empty file in the source directories, and three cases in its
-  regression test cover the rule.
+  lost: it was a file that existed and held nothing, and it shipped in
+  three releases — v0.1.1, v0.1.2 and v0.1.3 — before somebody looked
+  at the file list. The file is gone, and the privacy scanner now fails
+  on a source file that holds nothing.
+
+### Changed
+
+- **The empty-source-file rule now covers the whole source tree.**
+  The first version of the rule looked at two directories and missed
+  two others, so an empty integration test and an empty sweep script
+  were both invisible. An empty sweep script is the worse of the two:
+  it exits with a success and reports nothing, which looks exactly like
+  a sweep that found no problems. The rule now covers `src`,
+  `src-tauri/src`, `src-tauri/tests` and `scripts`, and it uses the
+  scanner's own walk, so the generated directories, the symbolic links
+  and the unreadable files are handled the way the scan itself handles
+  them. A file holding nothing but whitespace is reported as well: it
+  declares an empty module, which is the same defect as a file with no
+  bytes in it. Nine mutations of the rule are caught by the scanner's
+  regression test, which now holds sixty-two cases.
 
 ## [0.1.3] - 2026-11-25
 
@@ -430,8 +446,13 @@ The first release.
   secret, an email address or a private network address is embedded in
   the tree.
 
-[Unreleased]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.3...HEAD
-[0.1.3]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/Evaloric-ZA/agentops/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/Evaloric-ZA/agentops/releases/tag/v0.1.0
+# The version links are relative, so that this file carries no remote
+# address, no owner name and no repository name. From the file's place
+# in the tree, two levels up is the repository root, so `../../releases`
+# and `../../compare` are the release list and the comparison view.
+
+[Unreleased]: ../../compare/v0.1.3...HEAD
+[0.1.3]: ../../compare/v0.1.2...v0.1.3
+[0.1.2]: ../../compare/v0.1.1...v0.1.2
+[0.1.1]: ../../compare/v0.1.0...v0.1.1
+[0.1.0]: ../../releases/tag/v0.1.0

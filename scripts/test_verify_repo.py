@@ -28,7 +28,7 @@ import shutil
 import stat
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -313,6 +313,121 @@ def the_basic_cases() -> None:
     )
 
 
+def the_empty_source_file_cases() -> None:
+    """11. A source file that exists but was never written.
+
+    An empty source file is usually an edit that went to the wrong
+    path: the file was created and the content landed somewhere else.
+    The compiler never sees it, so nothing else would notice it.
+
+    The paths are compared with forward slashes, which is what the
+    function returns on every platform: the first version of this case
+    compared a Windows path with a slash in it and failed only on the
+    Windows runner.
+    """
+    empty_root = build({"src/empty.rs": "", "src/full.rs": "fn main() {}\n"})
+    empty = verify_repo.empty_source_files(empty_root)
+    report(
+        "an empty source file is found",
+        empty == [("src/empty.rs", "is empty")],
+        str(empty),
+    )
+    report(
+        "a source file with content is not flagged",
+        verify_repo.empty_source_files(build({"src/full.rs": "fn main() {}\n"})) == [],
+    )
+    report(
+        "an empty file outside the source directories is not flagged",
+        verify_repo.empty_source_files(build({"docs/notes.md": ""})) == [],
+    )
+
+    # Every source directory is covered. The first version of the check
+    # looked at two of them, and an empty file in either of the other
+    # two is just as invisible.
+    for directory in ("src", "src-tauri/src", "src-tauri/tests", "scripts"):
+        name = f"{directory}/stray.rs"
+        found = verify_repo.empty_source_files(build({name: ""}))
+        report(
+            f"an empty file in {directory} is found",
+            found == [(name, "is empty")],
+            str(found),
+        )
+
+    # A file that holds nothing but whitespace declares an empty module,
+    # which is the same defect as a file with no bytes in it.
+    found = verify_repo.empty_source_files(build({"src/blank.rs": "\n\n   \n"}))
+    report(
+        "a source file holding only whitespace is found",
+        found == [("src/blank.rs", "holds nothing but whitespace")],
+        str(found),
+    )
+    report(
+        "a source file holding one line of text is not flagged",
+        verify_repo.empty_source_files(build({"src/one.rs": "// a note\n"})) == [],
+    )
+
+    # Generated output and local state inside a source directory are not
+    # source and are not in the commit. The cache directory holds a file
+    # that is not a bytecode file, so the directory is what excludes it.
+    generated = build(
+        {
+            "src-tauri/src/target/debug/thing.rs": "",
+            "scripts/__pycache__/leftover.txt": "",
+            "scripts/thing.cpython-312.pyc": "",
+            "src/.DS_Store": "",
+        }
+    )
+    try:
+        report(
+            "generated output and local state are not flagged",
+            verify_repo.empty_source_files(generated) == [],
+            str(verify_repo.empty_source_files(generated)),
+        )
+    finally:
+        shutil.rmtree(generated, ignore_errors=True)
+
+    # The path is spelled the same on every platform. The relative path
+    # is made to behave like a Windows one, so the case holds on every
+    # machine rather than only on the one that has Windows on it.
+    windows_root = build({"src/empty.rs": ""})
+    try:
+        relative_to = Path.relative_to
+
+        def as_windows(self, other):
+            return PureWindowsPath(str(relative_to(self, other)))
+
+        with patch.object(Path, "relative_to", as_windows):
+            spelled = verify_repo.empty_source_files(windows_root)
+        report(
+            "the path is spelled the same on every platform",
+            spelled == [("src/empty.rs", "is empty")],
+            str(spelled),
+        )
+    finally:
+        shutil.rmtree(windows_root, ignore_errors=True)
+
+    # The check has to survive the file it cannot read. The file cannot
+    # be read, so the check cannot tell whether it is empty, and it must
+    # say so by leaving it alone rather than by failing.
+    unreadable_root = build({"src/locked.rs": "// a note\n", "src/empty.rs": ""})
+    try:
+        with patch.object(Path, "read_bytes", side_effect=OSError("cannot read")):
+            unreadable = verify_repo.empty_source_files(unreadable_root)
+        report(
+            "a source file the check cannot read does not crash it",
+            unreadable == [("src/empty.rs", "is empty")],
+            str(unreadable),
+        )
+    except OSError as error:
+        report(
+            "a source file the check cannot read does not crash it",
+            False,
+            f"the check raised {error}",
+        )
+    finally:
+        shutil.rmtree(unreadable_root, ignore_errors=True)
+
+
 def main() -> int:
     the_basic_cases()
     the_oversize_cases()
@@ -362,25 +477,7 @@ def main() -> int:
     expect_clean("an ordinary shell script", "#!/bin/sh\necho hello\n")
     expect_clean("a binary file", "some bytes", binary=True)
 
-    # An empty source file is usually an edit that went to the wrong
-    # path: the file was created and the content landed somewhere else.
-    # The compiler never sees it, so nothing else would notice it.
-    #
-    # The paths are compared with forward slashes, which is what the
-    # function returns on every platform: the first version of this
-    # case compared a Windows path with a slash in it and failed only
-    # on the Windows runner.
-    empty_root = build({"src/empty.rs": "", "src/full.rs": "fn main() {}\n"})
-    empty = verify_repo.empty_source_files(empty_root)
-    report("an empty source file is found", empty == ["src/empty.rs"], str(empty))
-    report(
-        "a source file with content is not flagged",
-        verify_repo.empty_source_files(build({"src/full.rs": "fn main() {}\n"})) == [],
-    )
-    report(
-        "an empty file outside the source directories is not flagged",
-        verify_repo.empty_source_files(build({"docs/notes.md": ""})) == [],
-    )
+    the_empty_source_file_cases()
 
     print()
     print(f"{PASSED} passed, {FAILED} failed, {SKIPPED} skipped")

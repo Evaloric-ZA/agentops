@@ -17,12 +17,19 @@ addresses permitted.
 The scanner has its own regression test, `scripts/test_verify_repo.py`, so
 the false negatives it once had cannot come back unnoticed.
 
-It also fails on an **empty file in the source directories**. An empty
-source file is usually an edit that went to the wrong path: the file is
+It also fails on a **source file that holds nothing**. An empty source
+file is usually an edit that went to the wrong path: the file is
 created, and the content lands somewhere else. Nothing declares the
 stray as a module, so the compiler never sees it and nothing else
-notices it either. One of them sat in the tree through two releases
+notices it either. One of them sat in the tree through three releases
 before somebody looked at the file list.
+
+The rule covers every source directory — `src`, `src-tauri/src`,
+`src-tauri/tests` and `scripts` — and a file holding nothing but
+whitespace counts as empty, because it declares an empty module. An
+empty sweep script matters most here: it exits with a success and
+reports nothing, which is indistinguishable from a sweep that found no
+problems.
 
 ### What the scanner decides about each file
 

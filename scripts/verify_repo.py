@@ -416,30 +416,80 @@ def format_summary(result: ScanResult) -> list[str]:
     ]
 
 
-SOURCE_DIRECTORIES = ("src", "src-tauri/src")
+# The directories that hold source. An empty file in one of them is
+# usually an edit that went to the wrong path: the file was created, and
+# the content landed somewhere else. Nothing declares the stray as a
+# module, so the compiler never sees it and nothing else notices it
+# either.
+#
+# All four are covered. The first version of this check looked at two of
+# them, and an empty file in either of the other two is just as
+# invisible: an empty sweep script exits with a success and reports
+# nothing, and an empty integration test contributes no test at all.
+SOURCE_DIRECTORIES = ("src", "src-tauri/src", "src-tauri/tests", "scripts")
+
+# The directories inside a source directory that hold generated output
+# or local state. They are not source and they are not in the commit,
+# so they are not searched for files that were never written. The
+# scanner skips the generated ones already; the cache directory is
+# added here because it holds bytecode, not source.
+SOURCE_SKIP_DIRS = SKIP_DIRS | {"__pycache__"}
 
 
-def empty_source_files(root: Path) -> list[str]:
+def empty_source_files(root: Path) -> list[tuple[str, str]]:
     """The source files that exist but were never written.
 
-    An empty source file is usually an edit that went to the wrong
-    path: the file was created, and the content landed somewhere else.
-    The compiler never sees it, because nothing declares it as a
-    module, so nothing else would notice it either. One of these sat in
-    the tree through a release before somebody looked at the file list.
+    Each entry is the path of the file and why it is empty: it is
+    either empty, or it holds nothing but whitespace. A file with
+    nothing but whitespace in it declares an empty module, which is the
+    same defect as a file with no bytes in it.
+
+    The walk is the scanner's own, so the generated directories, the
+    symbolic links and the unreadable directories are handled the same
+    way here as they are by the scan itself.
 
     The paths are returned with forward slashes on every platform, so
     that a caller, a message and a test all see the same string
     whichever one they are running on.
     """
-    found: list[str] = []
-    for directory in SOURCE_DIRECTORIES:
-        base = root / directory
-        if not base.is_dir():
+    found: list[tuple[str, str]] = []
+    for path, kind, _error in _walk(root):
+        if kind != "file":
             continue
-        for path in sorted(base.rglob("*")):
-            if path.is_file() and path.stat().st_size == 0:
-                found.append(path.relative_to(root).as_posix())
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            continue
+
+        text = relative.as_posix()
+        if not any(text.startswith(directory + "/") for directory in SOURCE_DIRECTORIES):
+            continue
+
+        parts = relative.parts
+        if any(part in SOURCE_SKIP_DIRS for part in parts[:-1]):
+            continue
+        name = parts[-1]
+        if name.startswith(".") or name.endswith(".pyc"):
+            continue
+
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+
+        if size == 0:
+            found.append((text, "is empty"))
+            continue
+        if size > MAX_BYTES:
+            continue
+
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        if raw.strip() == b"":
+            found.append((text, "holds nothing but whitespace"))
+
     return found
 
 
@@ -453,8 +503,8 @@ def main() -> int:
     for item in REQUIRED:
         if not (root / item).exists():
             errors.append(f"missing required path: {item}")
-    for empty in empty_source_files(root):
-        errors.append(f"the source file {empty} is empty")
+    for empty, reason in empty_source_files(root):
+        errors.append(f"the source file {empty} {reason}")
 
     result = scan(root)
     errors.extend(result.findings)
