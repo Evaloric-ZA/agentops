@@ -159,6 +159,15 @@ continuous integration security job does. They exit with 0 when they
 pass, 1 when they fail and 2 when they could not run, so that the sweep
 can tell a check that passed from a check that did not happen.
 
+**The three-platform matrix runs the developer verification**, so the
+Rust dependency audit is reported as a skip in those three jobs:
+`cargo-audit` is not installed there, and installing the same tool in
+three jobs is the redundancy the pinned version is meant to avoid. The
+audit is covered where it belongs — the security gate job and the
+release verification job both install it at the pinned version and run
+it in release mode, and the release verification job runs the whole
+sweep with nothing skipped at all.
+
 `docs/SECURITY.md` describes the policy itself: what fails, what warns,
 what is reported, how an exception is written and when it expires.
 

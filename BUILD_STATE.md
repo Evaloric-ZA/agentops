@@ -1191,6 +1191,30 @@ The continuous integration does download advisory databases. That is a
 build-time action by the build, and it is not the application reaching
 the network.
 
+### The continuous integration, and what it actually showed
+
+The workflow now has five jobs, and the run on the head of `main` after
+the v0.1.3 merge was executed, not merely configured:
+
+| Job | Result | What it showed |
+|---|---|---|
+| the release verification | PASS | `RELEASE VERIFICATION: every check has to run, and every check has to pass` · **passed: 16  failed: 0  skipped: 0** · 49 Rust tests |
+| the security gate | PASS | the npm gate passed · the Rust audit found 0 vulnerabilities and 3 informational advisories, all accepted · 44 policy cases · 50 scanner cases · 0 privacy violations |
+| the sweep (ubuntu-latest) | PASS | 15 passed, 0 failed, 1 skipped · 49 Rust tests |
+| the sweep (macos-latest) | PASS | 15 passed, 0 failed, 1 skipped · 49 Rust tests |
+| the sweep (windows-latest) | PASS | 15 passed, 0 failed, 1 skipped · 49 Rust tests |
+| the Windows application | PASS | `AgentOps_0.1.3_x64_en-US.msi` (4.77 MiB) and `AgentOps_0.1.3_x64-setup.exe` (2.97 MiB) |
+| the minimum supported Rust | PASS | it compiles on Rust 1.90 |
+
+The one skip in each of the three matrix legs is the Rust dependency
+audit, and it says so: `cargo-audit is not installed, so the Rust
+advisories were not scanned`. That is the developer mode behaving as
+designed. The audit is covered by the two jobs that install the pinned
+tool, and the release verification job has nothing skipped at all.
+
+The tag pushes each produced their own run, and both were green, so the
+two tagged commits are verified too.
+
 ### The packaged desktop smoke test
 
 The gap is documented precisely in `docs/TESTING.md`: against the ten
