@@ -1,38 +1,62 @@
 {
-  "note": "The Rust advisories that are accepted. The gate runs `cargo audit --deny warnings`, so an unmaintained, an unsound or a yanked crate fails the sweep unless it is listed here. A listed advisory is a decision to revisit, not a permanent exemption. cargo-audit 0.23 does not read an audit.toml, so the list is here and the sweep passes each identifier to it.",
+  "note": "The Rust advisories that are accepted. The gate runs the Rust audit and applies this file's policy itself: a vulnerability, or an informational advisory such as an unmaintained, an unsound or a yanked crate, fails the gate unless it is listed here. An entry is a dated decision, not a permanent exemption. cargo-audit 0.23 does not read an audit.toml, so the list is here and scripts/rust_audit_gate.py reads it.",
+  "policy": {
+    "review_period": "30 to 90 days from the date an entry is added, depending on the severity and on whether a fix exists.",
+    "expired": "An entry whose review date has passed fails the release gate. Nothing renews it automatically: an operator has to look at it and decide again.",
+    "stale": "An entry for an advisory the audit no longer finds fails the release gate. Remove it.",
+    "owner": "project-maintainers"
+  },
   "advisories": [
     {
-      "id": "RUSTSEC-2026-0543",
-      "package": "chrono",
+      "advisory": "RUSTSEC-2026-0543",
+      "crate": "chrono",
       "kind": "unmaintained",
-      "severity": "none: the crate is not vulnerable, it is no longer maintained",
+      "severity": "informational: the crate is not vulnerable, it is no longer maintained",
+      "scope": "runtime",
       "path": "agentops -> chrono",
-      "why": "chrono is used to format and parse RFC 3339 timestamps the application generates itself. There is no patched release to move to.",
+      "version": "0.4.45",
+      "patched_version": "none: every version of the crate is affected, the advisory reports no patched release",
+      "reason": "The crate is used to format and parse RFC 3339 timestamps that the application generates itself, and to shift those timestamps by whole minutes while seeding the synthetic dataset. There is no patched release to move to, because the advisory is about maintenance rather than a defect.",
       "exercised": "Yes, but only on the application's own timestamps. The crate is not exposed to untrusted input in a way that would turn a defect in it into a defect here.",
-      "action": "Replace chrono with time or jiff in a future release, which is a deliberate change with its own risk, so it is not done inside a maintenance release.",
-      "reviewed": "2026-11-24"
+      "remediation": "Replace chrono with time or jiff. The usage was inventoried for the v0.1.3 release: three files, src-tauri/src/util.rs (four helpers that format, parse and subtract RFC 3339 strings), src-tauri/src/simulator/mod.rs (the current instant) and src-tauri/src/seed.rs (whole-minute shifts on the seed's own timestamps). The stored representation is an RFC 3339 string with whole seconds and a Z suffix in a TEXT column, and the frontend parses those strings with the platform's date parser, so a migration has to produce byte-identical output. The migration was assessed in the v0.1.3 release and deliberately deferred: changing the timestamp library in the same release as the test-toolchain upgrade widens the blast radius of the release for an advisory that carries no exploit. It is planned for the next maintenance release, with a comparison test that asserts the new formatter's output is byte-identical to the old one.",
+      "upstream_dependency": "chronotope/chrono",
+      "status": "temporarily-accepted",
+      "added": "2026-11-25",
+      "review_by": "2027-02-23"
     },
     {
-      "id": "RUSTSEC-2024-0429",
-      "package": "glib",
+      "advisory": "RUSTSEC-2024-0429",
+      "crate": "glib",
       "kind": "unsound",
       "severity": "medium",
-      "path": "agentops -> tauri -> gtk -> glib (Linux only)",
-      "why": "The affected iterator implementations are in a GTK binding that the Tauri Linux backend pulls in. The application's own code never calls them.",
-      "exercised": "No. The crate is not in the macOS or Windows build at all, and the affected functions are not called on any platform.",
-      "action": "Move to a Tauri release built on glib 0.20 or later. That exists only in a prerelease of the next major version, which is not something a maintenance release should take.",
-      "reviewed": "2026-11-24"
+      "scope": "platform-specific",
+      "path": "agentops -> tauri 2.12.7 -> gtk 0.18.2 -> atk/tao/webkit2gtk -> glib 0.18.5 (Linux only)",
+      "version": "0.18.5",
+      "patched_version": "glib 0.20.0 or later carries the fix, but the Tauri 2 line does not move to it; the GTK stack only changes in the next major version of Tauri, which is a prerelease",
+      "reason": "The affected iterator implementations are in a GTK binding that the Tauri Linux backend pulls in. The application's own code never calls them.",
+      "exercised": "No. The crate is not in the macOS or Windows build at all, and the affected functions are not called on any platform. The dependency path was re-derived with `cargo tree --target all -i glib` for the v0.1.3 release and is unchanged.",
+      "remediation": "Move to a Tauri release built on glib 0.20 or later. That exists only in a prerelease of the next major version. Upgrading Tauri's major line is an application change rather than a dependency security fix, so it does not belong in a maintenance release, and it must not be forced with a version override on a transitive crate.",
+      "upstream_dependency": "gtk-rs/gtk-rs-core",
+      "status": "temporarily-accepted",
+      "added": "2026-11-25",
+      "review_by": "2027-01-24"
     },
     {
-      "id": "RUSTSEC-2024-0370",
-      "package": "proc-macro-error",
+      "advisory": "RUSTSEC-2024-0370",
+      "crate": "proc-macro-error",
       "kind": "unmaintained",
-      "severity": "none: the crate is not vulnerable, it is no longer maintained",
-      "path": "agentops -> tauri -> gtk -> glib -> glib-macros -> proc-macro-error (Linux only)",
-      "why": "It is a build-time dependency of the GTK bindings. It never reaches the shipped binary's runtime.",
-      "exercised": "No. It is not in the macOS or Windows build at all.",
-      "action": "It disappears with the same GTK upgrade as RUSTSEC-2024-0429.",
-      "reviewed": "2026-11-24"
+      "severity": "informational: the crate is not vulnerable, it is no longer maintained",
+      "scope": "build-time",
+      "path": "agentops -> tauri 2.12.7 -> gtk 0.18.2 -> glib 0.18.5 -> glib-macros 0.18.5 -> proc-macro-error 1.0.4 (Linux only)",
+      "version": "1.0.4",
+      "patched_version": "none: the advisory reports no patched release",
+      "reason": "It is a build-time dependency of the GTK bindings. It never reaches the shipped binary's runtime.",
+      "exercised": "No. It is not in the macOS or Windows build at all. The dependency path was re-derived with `cargo tree --target all -i proc-macro-error` for the v0.1.3 release and is unchanged.",
+      "remediation": "It disappears with the same GTK upgrade as RUSTSEC-2024-0429, because it is reached only through the GTK bindings.",
+      "upstream_dependency": "CreepySkeleton/proc-macro-error",
+      "status": "temporarily-accepted",
+      "added": "2026-11-25",
+      "review_by": "2027-02-23"
     }
   ]
 }

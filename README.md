@@ -7,8 +7,10 @@ agent registry, a run timeline, and the approvals that need a human.
 **Version 0.1 is a local proof of architecture.** Every record in it is
 synthetic. Nothing here connects to a real agent, a real model, or any
 network service, and no installer for a production deployment is implied.
-v0.1.2 is a maintenance release: no feature is added, no screen changes,
-and the data model is unchanged.
+v0.1.3 is a supply-chain security and release-gating maintenance release:
+no feature is added, no screen changes, the data model is unchanged, and
+the dependency audits became gates that fail a release rather than
+advisories that are printed.
 
 The development and continuous integration baseline is **Node.js 24**. The
 minimum supported Rust version is **1.90**. The versions actually tested
@@ -75,7 +77,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --all-features
 
-bash scripts/verify.sh
+bash scripts/verify.sh            # the developer verification
+bash scripts/verify.sh --release  # the release verification
 ```
 
 `scripts/verify.sh` runs the whole sweep and prints one line per stage:
@@ -87,7 +90,23 @@ scanner's own regression test. The stages are listed in
 so the two platforms run exactly the same checks.
 
 A stage that cannot run is reported as a skip, with its reason, and is
-never counted as a pass.
+never counted as a pass. **In the release mode it is a failure.** The
+release verification refuses to pass when a security control did not run:
+`cargo-audit` missing, an advisory database that could not be fetched, a
+package registry that could not be reached, or an advisory exception that
+has passed its review date all fail it.
+
+The two dependency gates can also be run on their own:
+
+```bash
+python3 scripts/npm_audit_gate.py --release .
+python3 scripts/rust_audit_gate.py --release .
+```
+
+They audit the whole dependency tree, the development toolchain
+included, because developers and the continuous integration execute it.
+The policy, the allowlists and the review dates are described in
+[docs/SECURITY.md](docs/SECURITY.md).
 
 ## Documentation
 

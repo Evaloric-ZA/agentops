@@ -35,4 +35,6 @@ if [ -z "$PYTHON" ]; then
   exit 1
 fi
 
-exec "$PYTHON" scripts/verify.py "$PWD"
+# Any arguments are passed on, so `scripts/verify.sh --release` runs the
+# release verification rather than the developer one.
+exec "$PYTHON" scripts/verify.py "$PWD" "$@"

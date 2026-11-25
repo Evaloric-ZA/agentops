@@ -153,3 +153,111 @@ jobs:
 
       - name: it compiles on the minimum supported Rust
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+
+  security:
+    name: the security gate
+    # The release security gate. It is its own job, independently of
+    # the compile and unit-test jobs, so that a security failure is
+    # visible on its own and cannot be masked by a passing build.
+    #
+    # It runs the two dependency gates in release mode, the two
+    # allowlist validators and the privacy scanner. If any of the
+    # tooling cannot initialise, the job fails: a security control that
+    # did not run is not a security control that passed.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: stable
+
+      # The audit tool is pinned to an exact version. A hosted runner's
+      # own copy is never trusted, and `cargo install cargo-audit`
+      # without a version would install whatever happened to be newest
+      # on the day the job ran, which makes the gate a moving target.
+      # This step is also the one that fails if the tool cannot be
+      # built, and the version it installed is recorded in the log.
+      - name: the pinned cargo-audit
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo audit --version
+
+      - name: the JavaScript dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The npm gate, in release mode. A Critical or a High advisory
+      # fails it, an expired exception fails it, and a registry that
+      # cannot be reached fails it rather than skipping it.
+      - name: the npm dependency gate
+        run: python3 scripts/npm_audit_gate.py --release .
+
+      # The Rust gate, in release mode, with the pinned tool and the
+      # allowlist that says which advisories are accepted and until
+      # when each of them has to be looked at again.
+      - name: the Rust dependency gate
+        run: python3 scripts/rust_audit_gate.py --release .
+
+      # The gates' own regression test: it proves the rules fail when
+      # they should, without needing a registry or an advisory database
+      # to produce a finding.
+      - name: the audit policy's regression test
+        run: python3 scripts/test_audit_policy.py
+
+      - name: the privacy scanner's regression test
+        run: python3 scripts/test_verify_repo.py
+
+      - name: the repository privacy scan
+        run: python3 scripts/verify_repo.py .
+
+  release:
+    name: the release verification
+    # The release gate: the whole sweep in release mode. Every check
+    # has to run, and a check that cannot run is a failure rather than
+    # a skip. This is the job that says whether a release is verified.
+    # The matrix above says whether the application works on three
+    # platforms.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: the Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            pkg-config
+
+      # The release verification refuses to run without the audit tool,
+      # so it is installed here at the pinned version.
+      - name: the pinned cargo-audit
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo audit --version
+
+      - name: the release verification
+        run: bash scripts/verify.sh --release

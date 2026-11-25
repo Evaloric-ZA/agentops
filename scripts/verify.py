@@ -22,7 +22,6 @@ nothing outside the repository and deletes nothing.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import subprocess
@@ -39,14 +38,26 @@ from ensure_cargo_tauri import ensure_cargo_tauri  # noqa: E402
 class Sweep:
     """Runs the checks and keeps the tally."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, release: bool = False) -> None:
         self.root = root
+        self.release = release
         self.passed = 0
         self.failed = 0
         self.skipped = 0
 
-    def run(self, label: str, command: list[str], missing_reason: str = "") -> bool:
-        """Run a check. Returns True when it passed."""
+    def run(
+        self,
+        label: str,
+        command: list[str],
+        missing_reason: str = "",
+        skip_codes: tuple[int, ...] = (),
+    ) -> bool:
+        """Run a check. Returns True when it passed.
+
+        A check that exits with one of the skip codes reports that it
+        could not run, rather than that it passed. The exit code 2 is
+        what the two dependency audit gates use for it.
+        """
         print(f"\n=== {label} ===", flush=True)
         try:
             code = subprocess.call(command, cwd=self.root)
@@ -60,10 +71,22 @@ class Sweep:
             self.passed += 1
             print(f"PASS: {label}", flush=True)
             return True
+        if code in skip_codes:
+            self.skip(label, "the check reported that it could not run")
+            return False
         self.fail(label, f"the command exited with {code}")
         return False
 
     def skip(self, label: str, reason: str) -> None:
+        """Report a check that could not run.
+
+        In release mode a check that could not run is a failure. A
+        release is not verified by a control that was absent.
+        """
+        if self.release:
+            self.failed += 1
+            print(f"FAIL: {label} ({reason}) — a release check cannot be skipped", flush=True)
+            return
         self.skipped += 1
         print(f"SKIP: {label} ({reason})", flush=True)
 
@@ -106,60 +129,16 @@ def the_registry_is_reachable(root: Path, npm: list[str]) -> bool:
     return code == 0
 
 
-def run_the_rust_audit(sweep: "Sweep", root: Path) -> None:
-    """Audit the Rust dependencies.
-
-    The gate denies warnings, so an unmaintained, an unsound or a yanked
-    crate fails the sweep. The advisories that have been accepted are
-    listed in scripts/rust_audit_allowlist.json, each with the reason
-    and what would close it; they are passed to the tool as exclusions.
-    Anything not listed fails.
-    """
-    allowlist = root / "scripts" / "rust_audit_allowlist.json"
-    accepted = []
-    if allowlist.exists():
-        try:
-            data = json.loads(allowlist.read_text(encoding="utf-8"))
-            accepted = [entry["id"] for entry in data.get("advisories", [])]
-        except (ValueError, KeyError, TypeError) as error:
-            sweep.fail(
-                "the Rust dependency audit",
-                f"the allowlist could not be read: {error}",
-            )
-            return
-
-    # The advisory database is fetched once. If it cannot be fetched the
-    # check is skipped with the reason, not failed: an unreachable
-    # network says nothing about the dependencies.
-    database = Path.home() / ".cargo" / "advisory-db"
-    if not database.exists():
-        fetched = subprocess.call(
-            ["cargo", "audit", "update-db"],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if fetched != 0:
-            sweep.skip(
-                "the Rust dependency audit",
-                "the advisory database could not be fetched from here",
-            )
-            return
-
-    command = [
-        "cargo", "audit",
-        "--file", "src-tauri/Cargo.lock",
-        "--no-fetch",
-        "--deny", "warnings",
-    ]
-    for advisory in accepted:
-        command += ["--ignore", advisory]
-    sweep.run("the Rust dependency audit", command, "cargo is not installed")
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="the acceptance sweep; --release turns every skip into a failure"
+    )
     parser.add_argument("root", type=Path, nargs="?", default=Path.cwd())
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="fail when a control is absent rather than skipping it",
+    )
     args = parser.parse_args()
     root = args.root.resolve()
     if not root.is_dir():
@@ -167,8 +146,11 @@ def main() -> int:
         return 1
     os.chdir(root)
 
+    release = args.release
     python = sys.executable
-    sweep = Sweep(root)
+    sweep = Sweep(root, release=release)
+    if release:
+        print("RELEASE VERIFICATION: every check has to run, and every check has to pass")
 
     # The programs are resolved once. On Windows `npm` is `npm.cmd`, and
     # Python starts a program without a shell, so a bare `npm` is not
@@ -235,6 +217,15 @@ def main() -> int:
         "the Python interpreter is not available",
     )
 
+    # The two dependency gates' own regression test. It proves that the
+    # gates fail when they should, without needing a registry or an
+    # advisory database to produce a finding.
+    sweep.run(
+        "the audit policy's regression test",
+        [python, "scripts/test_audit_policy.py"],
+        "the Python interpreter is not available",
+    )
+
     # The Rust domain vocabulary and the TypeScript mirror must agree.
     sweep.run(
         "the type vocabulary check",
@@ -258,47 +249,40 @@ def main() -> int:
             "npm is not installed",
         )
 
-    # The dependency advisories. The npm registry has to be reachable for
-    # the JavaScript audit; the Rust audit needs a tool that is not part
-    # of the toolchain and is not installed without the operator's
-    # agreement, so it is reported as skipped rather than as passed.
+    # The dependency advisories. The two gates live in their own files,
+    # because the continuous integration security job runs them on their
+    # own and because they have to be testable without a registry or an
+    # advisory database.
+    #
+    # The JavaScript gate audits the whole tree, the development
+    # toolchain included: a developer runs those packages and the
+    # continuous integration runs them, so an advisory in them is not
+    # an advisory in something that never executes.
+    gate = [python, "scripts/npm_audit_gate.py", str(root)]
+    if release:
+        gate.append("--release")
     if the_registry_is_reachable(root, npm):
         sweep.run(
-            "the production dependency audit",
-            npm + ["audit", "--omit=dev", "--audit-level=moderate"],
-            "npm is not installed",
+            "the npm dependency audit",
+            gate,
+            "the Python interpreter is not available",
+            skip_codes=(2,),
         )
-        # The development toolchain has advisories of its own. They do
-        # not ship with the application and the application does not
-        # exercise them, so they are reported here and listed in
-        # docs/SECURITY.md rather than allowed to fail the sweep.
-        print("\n=== the development dependency audit ===", flush=True)
-        code = subprocess.call(npm + ["audit"], cwd=root)
-        if code == 0:
-            sweep.note("the development dependency audit", "no advisories were found")
-        else:
-            sweep.note(
-                "the development dependency audit",
-                "there are advisories in the development toolchain; "
-                "they are listed in docs/SECURITY.md",
-            )
     else:
         sweep.skip(
-            "the production dependency audit",
-            "the package registry cannot be reached from here",
-        )
-        sweep.skip(
-            "the development dependency audit",
+            "the npm dependency audit",
             "the package registry cannot be reached from here",
         )
 
-    if shutil.which("cargo-audit"):
-        run_the_rust_audit(sweep, root)
-    else:
-        sweep.skip(
-            "the Rust dependency audit",
-            "cargo-audit is not installed, so the Rust advisories were not scanned",
-        )
+    gate = [python, "scripts/rust_audit_gate.py", str(root)]
+    if release:
+        gate.append("--release")
+    sweep.run(
+        "the Rust dependency audit",
+        gate,
+        "the Python interpreter is not available",
+        skip_codes=(2,),
+    )
 
     sweep.run(
         "the privacy verifier",
@@ -310,6 +294,8 @@ def main() -> int:
     print(f"passed: {sweep.passed}  failed: {sweep.failed}  skipped: {sweep.skipped}")
     if sweep.skipped:
         print("a skipped check is not a passed check")
+    if release:
+        print("RELEASE VERIFICATION: a skipped check is a failure, and the result above is the release result")
     return 1 if sweep.failed else 0
 
 

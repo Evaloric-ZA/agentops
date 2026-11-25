@@ -193,6 +193,55 @@ The debug build is what the acceptance sweep uses, because it is much
 faster to produce and is enough to prove the application assembles and
 links.
 
+## Before a release is cut
+
+A release is verified by the release verification, not by the developer
+one. The difference is that a check which cannot run is a failure rather
+than a skip:
+
+```bash
+bash scripts/verify.sh --release
+```
+
+The command needs `cargo-audit`, because the release verification
+refuses to pass without it. It is not part of the Rust toolchain:
+
+```bash
+cargo install cargo-audit --version 0.23.0 --locked
+cargo audit --version
+```
+
+The version is pinned for the same reason it is pinned in the continuous
+integration: a tool that floats is a gate that moves. The continuous
+integration installs the same version, so the local and the continuous
+runs audit with the same rules.
+
+What the release verification does that the developer one does not:
+
+- it fails when `cargo-audit` is not installed;
+- it fails when the advisory database cannot be fetched;
+- it fails when the package registry cannot be reached;
+- it fails when an advisory exception has passed its review date;
+- it fails when an advisory exception names an advisory that no longer
+  exists;
+- it fails on any check that cannot run at all.
+
+The two dependency gates can also be run on their own, which is what the
+continuous integration security job does:
+
+```bash
+python3 scripts/npm_audit_gate.py --release .
+python3 scripts/rust_audit_gate.py --release .
+```
+
+They exit with 0 when they pass, 1 when they fail and 2 when they could
+not run.
+
+The continuous integration has a job for each of the two: the security
+gate, which runs the gates and the scanners, and the release
+verification, which runs the whole sweep in release mode. Both install
+the pinned audit tool, and both fail if it cannot be installed.
+
 ## The application data directory
 
 On first launch the application creates its database and seeds it:
