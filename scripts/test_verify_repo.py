@@ -365,6 +365,11 @@ def main() -> int:
     # An empty source file is usually an edit that went to the wrong
     # path: the file was created and the content landed somewhere else.
     # The compiler never sees it, so nothing else would notice it.
+    #
+    # The paths are compared with forward slashes, which is what the
+    # function returns on every platform: the first version of this
+    # case compared a Windows path with a slash in it and failed only
+    # on the Windows runner.
     empty_root = build({"src/empty.rs": "", "src/full.rs": "fn main() {}\n"})
     empty = verify_repo.empty_source_files(empty_root)
     report("an empty source file is found", empty == ["src/empty.rs"], str(empty))

@@ -425,8 +425,12 @@ def empty_source_files(root: Path) -> list[str]:
     An empty source file is usually an edit that went to the wrong
     path: the file was created, and the content landed somewhere else.
     The compiler never sees it, because nothing declares it as a
-    module, so nothing else notices it either. One of these sat in the
-    tree through a release before somebody looked at the file list.
+    module, so nothing else would notice it either. One of these sat in
+    the tree through a release before somebody looked at the file list.
+
+    The paths are returned with forward slashes on every platform, so
+    that a caller, a message and a test all see the same string
+    whichever one they are running on.
     """
     found: list[str] = []
     for directory in SOURCE_DIRECTORIES:
@@ -435,7 +439,7 @@ def empty_source_files(root: Path) -> list[str]:
             continue
         for path in sorted(base.rglob("*")):
             if path.is_file() and path.stat().st_size == 0:
-                found.append(str(path.relative_to(root)))
+                found.append(path.relative_to(root).as_posix())
     return found
 
 
